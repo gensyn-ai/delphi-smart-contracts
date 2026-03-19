@@ -1,0 +1,15 @@
+{
+    "delphiFactory": "0x0000000000000000000000000000000000000000",
+    "initialLiquidity": 0,
+    "newMarketMetadata": {
+        "uri": "",
+        "uriContentHash": "0x0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "newMarketConfig": {
+        "outcomeCount": 0,
+        "k": 0,
+        "tradingFee": 0,
+        "tradingDeadline": 0,
+        "settlementDeadline": 0
+    }
+}

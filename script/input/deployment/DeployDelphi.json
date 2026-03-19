@@ -1,0 +1,17 @@
+{
+    "token": {
+        "address": "0x0000000000000000000000000000000000000000",
+        "config": {
+            "admin": "0x0000000000000000000000000000000000000000",
+            "initialAmount": 0
+        }
+    },
+    "implementation": {
+        "tradingFeesRecipient": "0x0000000000000000000000000000000000000000",
+        "tradingFeesRecipientPct": 100000000000000000
+    },
+    "factory": {
+        "marketCreationFeeRecipient": "0x0000000000000000000000000000000000000000",
+        "marketCreationFee": 0
+    }
+}
