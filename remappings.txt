@@ -1,0 +1,3 @@
+forge-std/=lib/forge-std/src/
+@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/
+@safe-contracts/=lib/safe-contracts/contracts/

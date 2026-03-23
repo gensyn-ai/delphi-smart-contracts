@@ -1,0 +1,7 @@
+[gensyn-testnet]
+block = 15599389
+usdc = "0x121Aa2cc4EF60165E264f228bF418B526b8368d8"
+
+[gensyn-mainnet]
+block = 7052183
+usdc = "0x1B8972370B26f6b9b7d5B823437Ba7674C53cb2a"
