@@ -119,7 +119,7 @@ abstract contract DynamicParimutuel_Invariants is Invariants_Base, DelphiTestUti
         assertApproxEqRelDecimal(
             calculatedPool, // left
             marketInfo.pool, // right
-            2 * BASIS_POINT, // tolerance: 0.02%
+            BASIS_POINT, // tolerance
             handler.tokenDecimals(), // decimals
             "Pool value should equal the sum of outcome values"
         );
