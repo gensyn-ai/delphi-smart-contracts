@@ -276,7 +276,7 @@ contract EndToEndHandler is IEndToEndHandler, DelphiDeployer, DelphiTestUtils {
 
         // Calculate expected initial price
         uint256 expectedInitialPrice =
-            (args.newMarketConfig.k * ONE) / ((args.newMarketConfig.outcomeCount * 1e36).sqrt() * _tokenDecimalScaler);
+            (args.newMarketConfig.b * ONE) / ((args.newMarketConfig.outcomeCount * 1e36).sqrt() * _tokenDecimalScaler);
 
         // Pick winning outcome idx
         winningOutcomeIdx = _getRandomIdx(args.newMarketConfig.outcomeCount, args.winningOutcomeIdx);

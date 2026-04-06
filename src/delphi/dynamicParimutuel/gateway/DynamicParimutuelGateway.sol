@@ -229,7 +229,7 @@ contract DynamicParimutuelGateway is IDynamicParimutuelGateway, Initializable {
         ifDeployedByFactory(marketProxy)
         returns (uint256)
     {
-        return marketProxy.MIN_K();
+        return marketProxy.MIN_B();
     }
 
     /// @inheritdoc IDynamicParimutuelGateway
@@ -239,7 +239,7 @@ contract DynamicParimutuelGateway is IDynamicParimutuelGateway, Initializable {
         ifDeployedByFactory(marketProxy)
         returns (uint256)
     {
-        return marketProxy.MAX_K();
+        return marketProxy.MAX_B();
     }
 
     /// @inheritdoc IDynamicParimutuelGateway
@@ -360,7 +360,7 @@ contract DynamicParimutuelGateway is IDynamicParimutuelGateway, Initializable {
 
         // Checks: Calculate net tokens in (no fees)
         // Note: Every operation is rounded aagainst the user
-        uint256 netTokensIn = market.config.k.mulDivUp(c1Sqrt - c0Sqrt, 1e18 * TOKEN_DECIMAL_SCALER);
+        uint256 netTokensIn = market.config.b.mulDivUp(c1Sqrt - c0Sqrt, 1e18 * TOKEN_DECIMAL_SCALER);
 
         // Checks: Validate net tokens in
         if (netTokensIn == 0) {
@@ -427,7 +427,7 @@ contract DynamicParimutuelGateway is IDynamicParimutuelGateway, Initializable {
 
         // Calculate gross tokens out (no fees)
         // Note: Every operation is rounded against the user
-        uint256 grossTokensOut = market.config.k.mulDivDown(c0Sqrt - c1Sqrt, 1e18 * TOKEN_DECIMAL_SCALER);
+        uint256 grossTokensOut = market.config.b.mulDivDown(c0Sqrt - c1Sqrt, 1e18 * TOKEN_DECIMAL_SCALER);
 
         // Checks: Validate gross tokens out
         if (grossTokensOut == 0) {

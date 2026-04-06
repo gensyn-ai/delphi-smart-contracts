@@ -31,8 +31,8 @@ contract DynamicParimutuelMarket is
     // ===== CONSTANTS =====
     uint256 public constant override MIN_OUTCOME_COUNT = 2;
     uint256 public constant override MAX_OUTCOME_COUNT = 20;
-    uint256 public constant override MIN_K = 1e18; // 1
-    uint256 public constant override MAX_K = 100e18; // 100
+    uint256 public constant override MIN_B = 1e18; // 1
+    uint256 public constant override MAX_B = 100e18; // 100
     uint256 public constant override MIN_TRADING_FEE = 0.005e18; // 0.5%
     uint256 public constant override MAX_TRADING_FEE = 0.05e18; // 5%
     uint256 public constant override MIN_TRADING_WINDOW = 2 minutes;
@@ -172,7 +172,7 @@ contract DynamicParimutuelMarket is
         }
 
         // Calculate shares per outcome
-        marketCreatorSharesPerOutcome = newMarketConfig_.k
+        marketCreatorSharesPerOutcome = newMarketConfig_.b
             .sharesPerOutcomeAtMarketCreation({
                 outcomeCount: newMarketConfig_.outcomeCount,
                 initialLiquidity: initialLiquidity_,
@@ -229,7 +229,7 @@ contract DynamicParimutuelMarket is
         (uint256 netTokensIn, uint256 feeAmount) = tokensIn.deductFee(_market.config.tradingFee);
 
         // Checks: Validate buy
-        (uint256 newSumTerm36, bool valid) = _market.config.k
+        (uint256 newSumTerm36, bool valid) = _market.config.b
             .buyIsValid({
                 currentSumTerm36: _market.sumTerm36,
                 modelCurrentSupply: totalSupply(outcomeIdx),
@@ -272,7 +272,7 @@ contract DynamicParimutuelMarket is
         }
 
         // Checks: Validate sell
-        (uint256 newSumTerm36, bool valid) = _market.config.k
+        (uint256 newSumTerm36, bool valid) = _market.config.b
             .sellIsValid({
                 currentSumTerm36: _market.sumTerm36,
                 modelCurrentSupply: totalSupply(outcomeIdx),
@@ -431,7 +431,7 @@ contract DynamicParimutuelMarket is
         }
 
         // Calculate total tokens out
-        totalTokensOut = _market.config.k
+        totalTokensOut = _market.config.b
             .liquidatorTotalReward({
                 numeratorSum: numeratorSum36 / 1e18,
                 currentSumTerm36: _market.sumTerm36,
@@ -554,7 +554,7 @@ contract DynamicParimutuelMarket is
 
     /// @inheritdoc IDynamicParimutuelMarket
     function spotPrice(uint256 outcomeIdx) public view validOutcomeIdx(outcomeIdx) returns (uint256) {
-        return _market.config.k
+        return _market.config.b
             .spotPrice({
                 outcomeSupply: totalSupply(outcomeIdx),
                 currentSumTerm36: _market.sumTerm36,
@@ -591,7 +591,7 @@ contract DynamicParimutuelMarket is
 
     /// @inheritdoc IDynamicParimutuelMarket
     function marketCreationSharesValue() public view returns (uint256 tokensOut) {
-        return _market.config.k
+        return _market.config.b
             .liquidatorTotalReward({
                 numeratorSum: outcomeSuppliesSum.mulDivDown(marketCreatorSharesPerOutcome, 1e18), // Note: round down (against user)
                 currentSumTerm36: _market.sumTerm36,
@@ -660,11 +660,11 @@ contract DynamicParimutuelMarket is
         }
 
         // Validate k
-        if (config.k < MIN_K) {
-            revert KTooLow(config.k, MIN_K);
+        if (config.b < MIN_B) {
+            revert KTooLow(config.b, MIN_B);
         }
-        if (config.k > MAX_K) {
-            revert KTooHigh(config.k, MAX_K);
+        if (config.b > MAX_B) {
+            revert KTooHigh(config.b, MAX_B);
         }
 
         // Validate trading fee

@@ -59,9 +59,9 @@ interface IDynamicParimutuelMarket is
     /// @notice Maximum number of outcomes a market can have.
     function MAX_OUTCOME_COUNT() external view returns (uint256);
     /// @notice Minimum liquidity depth parameter (k).
-    function MIN_K() external view returns (uint256);
+    function MIN_B() external view returns (uint256);
     /// @notice Maximum liquidity depth parameter (k).
-    function MAX_K() external view returns (uint256);
+    function MAX_B() external view returns (uint256);
     /// @notice Minimum trading fee percentage (18 decimal fixed-point).
     function MIN_TRADING_FEE() external view returns (uint256);
     /// @notice Maximum trading fee percentage (18 decimal fixed-point).

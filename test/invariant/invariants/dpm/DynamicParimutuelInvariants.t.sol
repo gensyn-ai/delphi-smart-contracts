@@ -33,7 +33,7 @@ abstract contract DynamicParimutuel_Invariants is Invariants_Base, DelphiTestUti
         uint256 marketOutcomeCount = market.getMarket().config.outcomeCount;
 
         // Get market k
-        uint256 k = market.getMarket().config.k;
+        uint256 b = market.getMarket().config.b;
 
         // For each model in the market
         for (uint256 outcomeIdx = 0; outcomeIdx < marketOutcomeCount; outcomeIdx++) {
@@ -41,7 +41,7 @@ abstract contract DynamicParimutuel_Invariants is Invariants_Base, DelphiTestUti
             uint256 outcomePrice = market.spotPrice(outcomeIdx);
 
             // Ensure price doesn't exceed k
-            assertLe(outcomePrice, k, "outcome price is not <= k");
+            assertLe(outcomePrice, b, "outcome price is not <= b");
         }
     }
 
@@ -56,8 +56,8 @@ abstract contract DynamicParimutuel_Invariants is Invariants_Base, DelphiTestUti
         uint256 tokenDecimals = market.TOKEN().decimals();
 
         // Calculate target prices sum
-        uint256 k = marketConfig.k / market.TOKEN_DECIMAL_SCALER();
-        uint256 maxPricesSum = k.mulDiv((marketConfig.outcomeCount * 1e36).sqrt(), ONE); // k * sqrt(outcomeCount)
+        uint256 b = marketConfig.b / market.TOKEN_DECIMAL_SCALER();
+        uint256 maxPricesSum = b.mulDiv((marketConfig.outcomeCount * 1e36).sqrt(), ONE); // k * sqrt(outcomeCount)
 
         // Initialize prices sum
         uint256 pricesSum;
@@ -67,7 +67,7 @@ abstract contract DynamicParimutuel_Invariants is Invariants_Base, DelphiTestUti
             pricesSum += market.spotPrice(outcomeIdx);
         }
 
-        assertGeDecimal(pricesSum, _adjustDown(k, BASIS_POINT), tokenDecimals, "prices sum not >= k");
+        assertGeDecimal(pricesSum, _adjustDown(b, BASIS_POINT), tokenDecimals, "prices sum not >= k");
         assertLeDecimal(pricesSum, _adjustUp(maxPricesSum, BASIS_POINT), tokenDecimals, "prices sum not <= kSqrt");
     }
 
@@ -77,7 +77,7 @@ abstract contract DynamicParimutuel_Invariants is Invariants_Base, DelphiTestUti
 
         IDynamicParimutuelMarket.MarketConfig memory marketConfig = market.getMarket().config;
         uint256 marketOutcomeCount = marketConfig.outcomeCount;
-        uint256 k = marketConfig.k;
+        uint256 b = marketConfig.b;
 
         uint256 priceSquareSum = 0;
         for (uint256 i = 0; i < marketOutcomeCount; i++) {
@@ -85,7 +85,7 @@ abstract contract DynamicParimutuel_Invariants is Invariants_Base, DelphiTestUti
             priceSquareSum += price * price;
         }
         uint256 tokenDecimalScalar = market.TOKEN_DECIMAL_SCALER();
-        uint256 kSquared = k * k / (tokenDecimalScalar * tokenDecimalScalar);
+        uint256 kSquared = b * b / (tokenDecimalScalar * tokenDecimalScalar);
         assertApproxEqRelDecimal(
             priceSquareSum, // left
             kSquared, // right

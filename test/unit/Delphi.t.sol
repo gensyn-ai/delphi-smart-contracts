@@ -243,14 +243,14 @@ contract DelphiUnit_Test is DelphiTestUtils, DelphiDeployer {
 
         args.marketCreator = CREATOR;
         args = _boundDeployMarketArgs(implementation, args);
-        args.newMarketConfig.k = bound(args.newMarketConfig.k, 0, implementation.MIN_K() - 1);
+        args.newMarketConfig.b = bound(args.newMarketConfig.b, 0, implementation.MIN_B() - 1);
 
         deal(address(token), CREATOR, args.initialLiquidity);
         token.approve(address(delphiFactory), args.initialLiquidity);
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IDynamicParimutuelMarketErrors.KTooLow.selector, args.newMarketConfig.k, implementation.MIN_K()
+                IDynamicParimutuelMarketErrors.KTooLow.selector, args.newMarketConfig.b, implementation.MIN_B()
             )
         );
         delphiFactory.deployNewMarketProxy({
@@ -270,14 +270,14 @@ contract DelphiUnit_Test is DelphiTestUtils, DelphiDeployer {
 
         args.marketCreator = CREATOR;
         args = _boundDeployMarketArgs(implementation, args);
-        args.newMarketConfig.k = bound(args.newMarketConfig.k, implementation.MAX_K() + 1, type(uint256).max);
+        args.newMarketConfig.b = bound(args.newMarketConfig.b, implementation.MAX_B() + 1, type(uint256).max);
 
         deal(address(token), CREATOR, args.initialLiquidity);
         token.approve(address(delphiFactory), args.initialLiquidity);
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IDynamicParimutuelMarketErrors.KTooHigh.selector, args.newMarketConfig.k, implementation.MAX_K()
+                IDynamicParimutuelMarketErrors.KTooHigh.selector, args.newMarketConfig.b, implementation.MAX_B()
             )
         );
         delphiFactory.deployNewMarketProxy({
@@ -702,7 +702,7 @@ contract DelphiUnit_Test is DelphiTestUtils, DelphiDeployer {
 
         IDynamicParimutuelMarketTypes.MarketConfig memory config = IDynamicParimutuelMarketTypes.MarketConfig({
             outcomeCount: implementation.MIN_OUTCOME_COUNT(),
-            k: implementation.MIN_K(),
+            b: implementation.MIN_B(),
             tradingFee: implementation.MIN_TRADING_FEE(),
             tradingDeadline: block.timestamp + minTradingWindow,
             settlementDeadline: block.timestamp + minTradingWindow + implementation.MIN_SETTLEMENT_WINDOW()
@@ -766,7 +766,7 @@ contract DelphiUnit_Test is DelphiTestUtils, DelphiDeployer {
 
         uint256 minSharesDelta = gateway.MIN_SHARES_DELTA();
 
-        // With MIN_K and MIN_INITIAL_LIQUIDITY, buying MIN_SHARES_DELTA shares
+        // With MIN_B and MIN_INITIAL_LIQUIDITY, buying MIN_SHARES_DELTA shares
         // produces tokensIn well below minTokensDelta (1e4 for 6 decimals)
         vm.expectPartialRevert(IDynamicParimutuelGatewayErrors.TokensInBelowMin.selector);
         gateway.quoteBuyExactOut(marketProxy, 0, minSharesDelta);
@@ -777,7 +777,7 @@ contract DelphiUnit_Test is DelphiTestUtils, DelphiDeployer {
 
         uint256 minSharesDelta = gateway.MIN_SHARES_DELTA();
 
-        // With MIN_K and MIN_INITIAL_LIQUIDITY, selling a small amount of shares
+        // With MIN_B and MIN_INITIAL_LIQUIDITY, selling a small amount of shares
         // produces tokensOut below minTokensDelta (1e4 for 6 decimals).
         // We use minSharesDelta * 1e8 so grossTokensOut > 0 but still below minTokensDelta.
         uint256 sharesToSell = minSharesDelta * 1e8;

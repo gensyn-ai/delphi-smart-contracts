@@ -48,7 +48,7 @@ contract DelphiFork_Test is DelphiDeployer, DelphiTestUtils {
         uint256 tradingFeesRecipient;
         uint256 initialLiquidity;
         uint256 outcomeCount;
-        uint256 k;
+        uint256 b;
         uint256 tradingFee;
         uint256 tradingWindow;
         uint256 settlementWindow;
@@ -262,7 +262,7 @@ contract DelphiFork_Test is DelphiDeployer, DelphiTestUtils {
             newMarketInitializationCalldata_: abi.encode(
                 IDynamicParimutuelMarketTypes.MarketConfig({
                     outcomeCount: outcomeCount,
-                    k: bound(args.k, implementation.MIN_K(), implementation.MAX_K()),
+                    b: bound(args.b, implementation.MIN_B(), implementation.MAX_B()),
                     tradingFee: bound(
                         args.tradingFee, implementation.MIN_TRADING_FEE(), implementation.MAX_TRADING_FEE()
                     ),

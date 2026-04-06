@@ -102,14 +102,14 @@ contract DelphiTestUtils is BaseTest {
         );
 
         // Bound k
-        uint256 k = bound(config.k, implementation.MIN_K(), implementation.MAX_K());
+        uint256 b = bound(config.b, implementation.MIN_B(), implementation.MAX_B());
 
         // Return random config
         return IDynamicParimutuelMarketTypes.MarketConfig({
             outcomeCount: bound(
                 config.outcomeCount, implementation.MIN_OUTCOME_COUNT(), implementation.MAX_OUTCOME_COUNT()
             ),
-            k: k,
+            b: b,
             tradingFee: bound(config.tradingFee, implementation.MIN_TRADING_FEE(), implementation.MAX_TRADING_FEE()),
             tradingDeadline: tradingDeadline,
             settlementDeadline: bound(
@@ -167,7 +167,7 @@ contract DelphiTestUtils is BaseTest {
     }
 
     struct AssertionHelperInfo {
-        uint256 k;
+        uint256 b;
         uint256 price;
         uint256 tokenDecimals;
     }
@@ -190,7 +190,7 @@ contract DelphiTestUtils is BaseTest {
         uint256 price = netTokensIn.mulDiv(ONE, sharesOut);
 
         return AssertionHelperInfo({
-            k: _adjustUp(config.k / marketProxy.TOKEN_DECIMAL_SCALER(), BASIS_POINT),
+            b: _adjustUp(config.b / marketProxy.TOKEN_DECIMAL_SCALER(), BASIS_POINT),
             price: price,
             tokenDecimals: tokenDecimals
         });
@@ -214,14 +214,14 @@ contract DelphiTestUtils is BaseTest {
         uint256 price = grossTokensOut.mulDiv(ONE, sharesIn);
 
         return AssertionHelperInfo({
-            k: _adjustUp(config.k / marketProxy.TOKEN_DECIMAL_SCALER(), BASIS_POINT),
+            b: _adjustUp(config.b / marketProxy.TOKEN_DECIMAL_SCALER(), BASIS_POINT),
             price: price,
             tokenDecimals: tokenDecimals
         });
     }
 
     function _assertPriceLessThanK(AssertionHelperInfo memory info) private pure {
-        assertLtDecimal(info.price, info.k, info.tokenDecimals, "Buy | Actual price bigger than k");
+        assertLtDecimal(info.price, info.b, info.tokenDecimals, "Buy | Actual price bigger than k");
     }
 
     function _assertPriceGreaterThanSpot(AssertionHelperInfo memory info, uint256 spotPrice) private pure {

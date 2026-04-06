@@ -16,7 +16,7 @@ interface IDynamicParimutuelMarketTypes {
 
     struct MarketConfig {
         uint256 outcomeCount; // MIN_OUTCOME_COUNT (2) <= outcomeCount <= MAX_OUTCOME_COUNT
-        uint256 k; // MIN_K <= k <= MAX_K
+        uint256 b; // MIN_B <= b <= MAX_B
         uint256 tradingFee; // MIN_TRADING_FEE <= k <= MAX_TRADING_FEE
         uint256 tradingDeadline; // MIN_TRADING_WINDOW <= tradingDeadline - block.timestamp <= MAX_TRADING_WINDOW
         uint256 settlementDeadline; // MIN_SETTLEMENT_WINDOW <= settlementDeadline - tradingDeadline <= MAX_SETTLEMENT_WINDOW
