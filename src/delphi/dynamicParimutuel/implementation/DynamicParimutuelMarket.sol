@@ -396,6 +396,14 @@ contract DynamicParimutuelMarket is
             // Update shares in array
             sharesIn[i] = _sharesIn;
 
+            // Get outcome price
+            uint outcomePrice = _market.b.spotPrice({
+                outcomeSupply: totalSupply(outcomeIdx),
+                expSum: _market.expSum,
+                tokenDecimalScalar: TOKEN_DECIMAL_SCALER
+            });
+
+            // Increase total tokens out
             totalTokensOut += (sharesIn * outcomePrice) / 1e18;
 
             // Effects: Pull outcome shares (don't burn them, to keep the prices frozen)
