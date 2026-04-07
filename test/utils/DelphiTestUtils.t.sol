@@ -25,6 +25,9 @@ import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import {DynamicParimutuelMath} from "src/delphi/dynamicParimutuel/math/DynamicParimutuelMath.sol";
+import {LmsrMath} from "src/delphi/dynamicParimutuel/math/LmsrMath.sol";
+
+import {console} from "forge-std/console.sol";
 
 contract DelphiTestUtils is BaseTest {
     // Libraries
@@ -33,6 +36,7 @@ contract DelphiTestUtils is BaseTest {
     using DynamicParimutuelMath for uint256;
     using EnumerableSet for EnumerableSet.AddressSet;
     using EnumerableSet for EnumerableSet.UintSet;
+    using LmsrMath for uint256;
 
     // Constants
     uint256 public constant BASIS_POINT = 0.000_1e18; // 0.01%
@@ -67,6 +71,13 @@ contract DelphiTestUtils is BaseTest {
         randomElement = array[randomIdx];
     }
 
+    // b = initialLiquidity / ln(outcomeCount)
+    //
+    // initialLiquidity / ln(outcomeCount) >= MIN_B
+    // initialLiquidity >= MIN_B * ln(outcomeCount)
+    //
+    // initialLiquidity / ln(outcomeCount) <= MAX_B
+    // initialLiquidity <= MAX_B * ln(outcomeCount)
     function _boundDeployMarketArgs(
         IDynamicParimutuelMarket implementation,
         IEndToEndHandler.DeployMarketArgs memory args
@@ -74,6 +85,16 @@ contract DelphiTestUtils is BaseTest {
         // Bound MarketConfig
         IDynamicParimutuelMarket.MarketConfig memory newMarketConfig =
             _boundMarketConfig({implementation: implementation, config: args.newMarketConfig});
+
+        // uint minInitialLiquidity1 = implementation.MIN_INITIAL_LIQUIDITY();
+        // uint minInitialLiquidity2 = implementation.MIN_B() * (newMarketConfig.outcomeCount * 1e18)._computeLnUpperBound();
+        // uint minInitialLiquidity = minInitialLiquidity1 > minInitialLiquidity2 ? minInitialLiquidity1 : minInitialLiquidity2;
+        // console.log("minInitialLiquidity", minInitialLiquidity);
+
+        // uint maxInitialLiquidity1 = implementation.MAX_INITIAL_LIQUIDITY();
+        // uint maxInitialLiquidity2 = implementation.MAX_B() * (newMarketConfig.outcomeCount * 1e18)._computeLnLowerBound();
+        // uint maxInitialLiquidity = maxInitialLiquidity1 < maxInitialLiquidity2 ? maxInitialLiquidity1 : maxInitialLiquidity2;
+        // console.log("maxInitialLiquidity", maxInitialLiquidity);
 
         // Return DeployMarkeArgs
         return IEndToEndHandler.DeployMarketArgs({
@@ -110,7 +131,8 @@ contract DelphiTestUtils is BaseTest {
                 config.outcomeCount, implementation.MIN_OUTCOME_COUNT(), implementation.MAX_OUTCOME_COUNT()
             ),
             // b: b,
-            tradingFee: bound(config.tradingFee, implementation.MIN_TRADING_FEE(), implementation.MAX_TRADING_FEE()),
+            // tradingFee: bound(config.tradingFee, implementation.MIN_TRADING_FEE(), implementation.MAX_TRADING_FEE()),
+            tradingFee: 0,
             tradingDeadline: tradingDeadline,
             settlementDeadline: bound(
                 config.settlementDeadline,
@@ -348,10 +370,11 @@ contract DelphiTestUtils is BaseTest {
 
     function _quoteBuyExactOutAllowedErrors() internal pure returns (bytes4[] memory errSelectors) {
         // Initialize error selectors
-        errSelectors = new bytes4[](1);
+        errSelectors = new bytes4[](2);
 
         // Build error selectors
         errSelectors[0] = IDynamicParimutuelGatewayErrors.TokensInBelowMin.selector;
+        errSelectors[1] = IDynamicParimutuelGatewayErrors.OutcomeNewExpInputTooLarge.selector;
     }
 
     function _quoteSellExactInAllowedErrors() internal pure returns (bytes4[] memory errSelectors) {

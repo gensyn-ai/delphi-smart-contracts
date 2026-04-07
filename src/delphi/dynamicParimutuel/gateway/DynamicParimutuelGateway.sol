@@ -24,6 +24,8 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {LmsrMath} from "src/delphi/dynamicParimutuel/math/LmsrMath.sol";
 
+import {console} from "forge-std/console.sol";
+
 /// @title DynamicParimutuelGateway
 /// @notice Entry point for interacting with dynamic parimutuel markets.
 /// @dev After validating it was deployed by the registered factory, the gateway calls the market proxy (which in turn calls the market implementation).
@@ -339,7 +341,12 @@ contract DynamicParimutuelGateway is IDynamicParimutuelGateway, Initializable {
         // Get market
         IDynamicParimutuelMarket.Market memory market = marketProxy.getMarket();
 
-        uint256 outcomeNewExp = ((outcomeCurrentSupply + sharesOut) * 1e18 / market.b)._computeExp();
+        // console.log("((outcomeCurrentSupply + sharesOut) * 1e18 / market.b):", ((outcomeCurrentSupply + sharesOut) * 1e18 / market.b));
+        uint256 outcomeNewExpInput = ((outcomeCurrentSupply + sharesOut) * 1e18 / market.b);
+        if (outcomeNewExpInput > LmsrMath.MAX_EXP_INPUT) {
+            revert OutcomeNewExpInputTooLarge(outcomeNewExpInput, LmsrMath.MAX_EXP_INPUT);
+        }
+        uint256 outcomeNewExp = outcomeNewExpInput._computeExp();
         uint256 outcomeCurrentExp = (outcomeCurrentSupply * 1e18 / market.b)._computeExp();
 
         // Calculate new sum term
@@ -371,6 +378,7 @@ contract DynamicParimutuelGateway is IDynamicParimutuelGateway, Initializable {
         // Checks: Calculate tokens in (with fee)
         // Note: To round against the user, we ceil the division
         tokensIn = feeAdjustedB.mulDiv(ratioLn, 1e36 * TOKEN_DECIMAL_SCALER, Math.Rounding.Ceil);
+        tokensIn += 1;
 
         // // Checks: Validate net tokens in
         // if (netTokensIn == 0) {

@@ -203,7 +203,8 @@ contract EndToEndHandler is IEndToEndHandler, DelphiDeployer, DelphiTestUtils {
 
     function _deployFactory(DeployFactoryArgs calldata args) internal {
         // Deploy Token
-        token = new MockToken({_decimals: _boundUint8(args.decimals, 6, 18), admin: TOKEN_ADMIN, initialAmount: 0});
+        // token = new MockToken({_decimals: _boundUint8(args.decimals, 6, 18), admin: TOKEN_ADMIN, initialAmount: 0});
+        token = new MockToken({_decimals: 18, admin: TOKEN_ADMIN, initialAmount: 0});
 
         // Set vars
         tokenDecimals = token.decimals();

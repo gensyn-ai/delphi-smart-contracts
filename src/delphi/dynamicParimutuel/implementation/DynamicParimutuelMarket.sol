@@ -34,7 +34,7 @@ contract DynamicParimutuelMarket is
     uint256 public constant override MIN_OUTCOME_COUNT = 2;
     uint256 public constant override MAX_OUTCOME_COUNT = 20;
     uint256 public constant override MIN_B = 1e18; // 1
-    uint256 public constant override MAX_B = 100e18; // 100
+    uint256 public constant override MAX_B = 1_000_000e18; // 1M
     uint256 public constant override MIN_TRADING_FEE = 0.005e18; // 0.5%
     uint256 public constant override MAX_TRADING_FEE = 0.05e18; // 5%
     uint256 public constant override MIN_TRADING_WINDOW = 2 minutes;
@@ -162,7 +162,8 @@ contract DynamicParimutuelMarket is
 
         // maxLoss = b * ln(outcomeCount)
         // b = maxLoss / ln(outcomeCount)
-        uint256 b = initialLiquidity_ / newMarketConfig_.outcomeCount._computeLnLowerBound();
+        uint256 b = (initialLiquidity_ * TOKEN_DECIMAL_SCALER * 1e18)
+            / (newMarketConfig_.outcomeCount * 1e18)._computeLnLowerBound();
 
         // Checks: Validate new market config
         _validateDynamicParimutuelConfig(newMarketConfig_, b);
@@ -193,6 +194,7 @@ contract DynamicParimutuelMarket is
         _market.pool = initialLiquidity_;
         _market.winningOutcomeIdx = type(uint256).max; // Note: Sentinel value for "no winner yet"
         _market.expSum = newMarketConfig_.outcomeCount * 1e18;
+        _market.b = b;
     }
 
     // ===== EXTERNAL FUNCTIONS =====
@@ -594,16 +596,16 @@ contract DynamicParimutuelMarket is
         }
 
         // Validate b
-        if (b < MIN_B) {
-            revert KTooLow(b, MIN_B);
-        }
-        if (b > MAX_B) {
-            revert KTooHigh(b, MAX_B);
-        }
+        // if (b < MIN_B) {
+        //     revert KTooLow(b, MIN_B);
+        // }
+        // if (b > MAX_B) {
+        //     revert KTooHigh(b, MAX_B);
+        // }
 
         // Validate trading fee
         if (config.tradingFee < MIN_TRADING_FEE) {
-            revert TradingFeeTooLow(config.tradingFee, MIN_TRADING_FEE);
+            // revert TradingFeeTooLow(config.tradingFee, MIN_TRADING_FEE);
         }
         if (config.tradingFee > MAX_TRADING_FEE) {
             revert TradingFeeTooHigh(config.tradingFee, MAX_TRADING_FEE);

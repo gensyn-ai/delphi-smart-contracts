@@ -19,4 +19,5 @@ interface IDynamicParimutuelGatewayErrors is IDynamicParimutuelMathErrors {
     error DelphiFactoryIsNotContract(address delphiFactory);
     error GatewayNotInitialized();
     error MarketProxyNotDeployedByFactory(address marketProxy);
+    error OutcomeNewExpInputTooLarge(uint256 outcomeNewExpInput, uint256 maxExpInput);
 }

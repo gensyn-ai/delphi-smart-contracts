@@ -6,6 +6,8 @@ import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {LmsrMath} from "./LmsrMath.sol";
 import {IDynamicParimutuelMathErrors} from "./IDynamicParimutuelMathErrors.sol";
 
+import {console} from "forge-std/console.sol";
+
 /// @title DynamicParimutuelMath
 /// @notice Library implementing the mathematical operations for Dynamic-Parimutuel Prediction Markets.
 /// @dev All rounding is performed against the user (tokensIn rounded up, tokensOut rounded down) to prevent value extraction.
@@ -87,7 +89,16 @@ library DynamicParimutuelMath {
 
         // Check if buy is valid
         valid = tokensIn * tokenDecimalScalar * 1e18
-            >= b * (newZ._getExpUpperBound() / currentZ._getExpLowerBound())._computeLnUpperBound();
+            >= b * ((newZ._getExpUpperBound() * 1e18) / currentZ._getExpLowerBound())._computeLnUpperBound();
+        console.log("valid:", valid);
+        console.log(
+            "                                                         tokensIn * tokenDecimalScalar * 1e18:",
+            tokensIn * tokenDecimalScalar * 1e18
+        );
+        console.log(
+            "b * ((newZ._getExpUpperBound() * 1e18) / currentZ._getExpLowerBound())._computeLnUpperBound():",
+            b * ((newZ._getExpUpperBound() * 1e18) / currentZ._getExpLowerBound())._computeLnUpperBound()
+        );
     }
 
     /// @notice Validates that a sell is economically sound: the tokens received do not exceed the cost reduction.
@@ -137,7 +148,7 @@ library DynamicParimutuelMath {
 
         // Check if sell is valid
         valid = tokensOut * tokenDecimalScalar * 1e18
-            <= b * (newZ._getExpLowerBound() / currentZ._getExpUpperBound())._computeLnLowerBound();
+            <= b * ((newZ._getExpLowerBound() * 1e18) / currentZ._getExpUpperBound())._computeLnLowerBound();
     }
 
     // / @notice Calculates the spot price of a specific outcome.
