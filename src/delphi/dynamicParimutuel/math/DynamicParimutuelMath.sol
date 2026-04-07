@@ -140,20 +140,20 @@ library DynamicParimutuelMath {
             <= b * (newZ._getExpLowerBound() / currentZ._getExpUpperBound())._computeLnLowerBound();
     }
 
-    /// @notice Calculates the spot price of a specific outcome.
-    /// @dev Only used in external views, so no rounding direction is enforced.
-    /// @param k The liquidity depth parameter.
-    /// @param outcomeSupply The current supply of the outcome.
-    /// @param currentSumTerm36 The current sum of squared supplies (36 decimal precision).
-    /// @param tokenDecimalScalar The token decimal scaler (10^(18-decimals)).
-    /// @return The spot price of the outcome.
-    function spotPrice(uint256 k, uint256 outcomeSupply, uint256 currentSumTerm36, uint256 tokenDecimalScalar)
+    // / @notice Calculates the spot price of a specific outcome.
+    // / @dev Only used in external views, so no rounding direction is enforced.
+    // / @param k The liquidity depth parameter.
+    // / @param outcomeSupply The current supply of the outcome.
+    // / @param currentSumTerm36 The current sum of squared supplies (36 decimal precision).
+    // / @param tokenDecimalScalar The token decimal scaler (10^(18-decimals)).
+    // / @return The spot price of the outcome.
+    function spotPrice(uint256 b, uint256 outcomeSupply, uint256 expSum, uint256 tokenDecimalScalar)
         internal
         pure
         returns (uint256)
     {
         // Note: This is only used in external views, so no need to round against the user
-        return k.mulDiv(outcomeSupply, currentSumTerm36.sqrt() * tokenDecimalScalar);
+        return (((outcomeSupply * 1e18) / b)._computeExp() * 1e18) / expSum;
     }
 
     /// @notice Calculates the spot implied probability of a specific outcome.
@@ -161,10 +161,10 @@ library DynamicParimutuelMath {
     /// @param outcomeSupply The current supply of the outcome.
     /// @param currentSumTerm36 The current sum of squared supplies (36 decimal precision).
     /// @return The implied probability (18 decimal fixed-point).
-    function spotImpliedProbability(uint256 outcomeSupply, uint256 currentSumTerm36) internal pure returns (uint256) {
-        // Note: This is only used in external views, so no need to round against the user
-        return (outcomeSupply ** 2).mulDiv(1e18, currentSumTerm36);
-    }
+    // function spotImpliedProbability(uint256 outcomeSupply, uint256 currentSumTerm36) internal pure returns (uint256) {
+    //     // Note: This is only used in external views, so no need to round against the user
+    //     return (outcomeSupply ** 2).mulDiv(1e18, currentSumTerm36);
+    // }
 
     // /// @notice Calculates the number of shares per outcome minted at market creation.
     // /// @dev Derivation:
