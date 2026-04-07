@@ -166,48 +166,48 @@ library DynamicParimutuelMath {
         return (outcomeSupply ** 2).mulDiv(1e18, currentSumTerm36);
     }
 
-    /// @notice Calculates the number of shares per outcome minted at market creation.
-    /// @dev Derivation:
-    // poolAtCreation = k * sharesPerOutcome * sqrt(outcomeCount)
-    // poolAtCreation = k * sqrt(outcomeCount) * initialLiquidity / (k * outcomeCount)
-    // poolAtCreation = initialLiquidity * sqrt(outcomeCount) / outcomeCount
-    // poolAtCreation = initialLiquidity / sqrt(outcomeCount)
-    /// @param k The liquidity depth parameter.
-    /// @param outcomeCount The number of outcomes.
-    /// @param initialLiquidity The initial liquidity in token decimals.
-    /// @param tokenDecimalScalar The token decimal scaler (10^(18-decimals)).
-    /// @return The number of shares per outcome.
-    function sharesPerOutcomeAtMarketCreation(
-        uint256 k,
-        uint256 outcomeCount,
-        uint256 initialLiquidity,
-        uint256 tokenDecimalScalar
-    ) internal pure returns (uint256) {
-        return mulDivDown({a: initialLiquidity * tokenDecimalScalar, b: 1e18, denominator: k * outcomeCount});
-    }
+    // /// @notice Calculates the number of shares per outcome minted at market creation.
+    // /// @dev Derivation:
+    // // poolAtCreation = k * sharesPerOutcome * sqrt(outcomeCount)
+    // // poolAtCreation = k * sqrt(outcomeCount) * initialLiquidity / (k * outcomeCount)
+    // // poolAtCreation = initialLiquidity * sqrt(outcomeCount) / outcomeCount
+    // // poolAtCreation = initialLiquidity / sqrt(outcomeCount)
+    // /// @param k The liquidity depth parameter.
+    // /// @param outcomeCount The number of outcomes.
+    // /// @param initialLiquidity The initial liquidity in token decimals.
+    // /// @param tokenDecimalScalar The token decimal scaler (10^(18-decimals)).
+    // /// @return The number of shares per outcome.
+    // function sharesPerOutcomeAtMarketCreation(
+    //     uint256 k,
+    //     uint256 outcomeCount,
+    //     uint256 initialLiquidity,
+    //     uint256 tokenDecimalScalar
+    // ) internal pure returns (uint256) {
+    //     return mulDivDown({a: initialLiquidity * tokenDecimalScalar, b: 1e18, denominator: k * outcomeCount});
+    // }
 
     /// @notice Calculates the initial token pool size at market creation.
     /// @dev poolAtCreation = initialLiquidity / sqrt(outcomeCount). Rounded up to ensure the pool is fully funded.
     /// @param initialLiquidity The initial liquidity in token decimals.
     /// @param outcomeCount The number of outcomes.
     /// @return The initial pool size.
-    function poolAtCreation(uint256 initialLiquidity, uint256 outcomeCount) internal pure returns (uint256) {
-        return mulDivUp({a: initialLiquidity, b: 1e18, denominator: sqrtDown(outcomeCount * 1e36)});
-    }
+    // function poolAtCreation(uint256 initialLiquidity, uint256 outcomeCount) internal pure returns (uint256) {
+    //     return mulDivUp({a: initialLiquidity, b: 1e18, denominator: sqrtDown(outcomeCount * 1e36)});
+    // }
 
-    /// @notice Calculates the token reward for a redeemer based on their share of winning outcome shares.
-    /// @dev Rounded down (against the user).
-    /// @param marketPool The total token pool available for redemptions.
-    /// @param redeemerWinningShares The redeemer's winning shares.
-    /// @param unclaimedShares The total unclaimed winning shares.
-    /// @return The token reward.
-    function redeemerReward(uint256 marketPool, uint256 redeemerWinningShares, uint256 unclaimedShares)
-        internal
-        pure
-        returns (uint256)
-    {
-        return mulDivDown(marketPool, redeemerWinningShares, unclaimedShares); // Note: Down (against user)
-    }
+    // /// @notice Calculates the token reward for a redeemer based on their share of winning outcome shares.
+    // /// @dev Rounded down (against the user).
+    // /// @param marketPool The total token pool available for redemptions.
+    // /// @param redeemerWinningShares The redeemer's winning shares.
+    // /// @param unclaimedShares The total unclaimed winning shares.
+    // /// @return The token reward.
+    // function redeemerReward(uint256 marketPool, uint256 redeemerWinningShares, uint256 unclaimedShares)
+    //     internal
+    //     pure
+    //     returns (uint256)
+    // {
+    //     return mulDivDown(marketPool, redeemerWinningShares, unclaimedShares); // Note: Down (against user)
+    // }
 
     /// @notice Calculates the token reward for a liquidator from an expired market.
     /// @dev Rounded down (against the user).

@@ -112,9 +112,9 @@ interface IDynamicParimutuelGateway is IDynamicParimutuelGatewayErrors {
     /// @notice Liquidates the market creator's initial shares from an expired market and sends proceeds to the trading fees recipient.
     /// @param marketProxy The market proxy contract.
     /// @return _totalTokensOut The total tokens sent to the trading fees recipient.
-    function liquidateMarketCreationShares(IDynamicParimutuelMarket marketProxy)
-        external
-        returns (uint256 _totalTokensOut);
+    // function liquidateMarketCreationShares(IDynamicParimutuelMarket marketProxy)
+    //     external
+    //     returns (uint256 _totalTokensOut);
 
     /// @notice Liquidates the caller's shares across multiple outcomes for tokens.
     /// @param marketProxy The market proxy contract.
@@ -365,7 +365,7 @@ interface IDynamicParimutuelGateway is IDynamicParimutuelGatewayErrors {
 
     /// @notice Returns whether the market creator's initial shares have been liquidated.
     /// @param marketProxy The market proxy contract.
-    function marketCreationSharesLiquidated(IDynamicParimutuelMarket marketProxy) external view returns (bool);
+    // function marketCreationSharesLiquidated(IDynamicParimutuelMarket marketProxy) external view returns (bool);
 
     /// @notice Returns the current token value of the market creator's initial shares.
     /// @param marketProxy The market proxy contract.

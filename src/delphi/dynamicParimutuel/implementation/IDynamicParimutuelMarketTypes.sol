@@ -7,6 +7,7 @@ interface IDynamicParimutuelMarketTypes {
         uint256 pool;
         uint256 tradingFees;
         uint256 expSum;
+        uint256 b; // MIN_B <= b <= MAX_B
 
         // Initialized to max uint256, this sentinel value signals that no winning outcome is set yet.
         // Can ONLY be set by the creator while the market is AWAITING_SETTLEMENT.
@@ -16,7 +17,7 @@ interface IDynamicParimutuelMarketTypes {
 
     struct MarketConfig {
         uint256 outcomeCount; // MIN_OUTCOME_COUNT (2) <= outcomeCount <= MAX_OUTCOME_COUNT
-        uint256 b; // MIN_B <= b <= MAX_B
+        // uint256 b; // MIN_B <= b <= MAX_B
         uint256 tradingFee; // MIN_TRADING_FEE <= k <= MAX_TRADING_FEE
         uint256 tradingDeadline; // MIN_TRADING_WINDOW <= tradingDeadline - block.timestamp <= MAX_TRADING_WINDOW
         uint256 settlementDeadline; // MIN_SETTLEMENT_WINDOW <= settlementDeadline - tradingDeadline <= MAX_SETTLEMENT_WINDOW

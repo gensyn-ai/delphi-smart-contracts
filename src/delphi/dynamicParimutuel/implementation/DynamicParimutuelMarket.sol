@@ -17,6 +17,8 @@ import {IDynamicParimutuelGateway} from "src/delphi/dynamicParimutuel/gateway/ID
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {IERC6909} from "@openzeppelin/contracts/interfaces/IERC6909.sol";
 
+import {LmsrMath} from "src/delphi/dynamicParimutuel/math/LmsrMath.sol";
+
 /// @title DynamicParimutuelMarket
 /// @notice Implementation of a dynamic parimutuel prediction market using an ERC6909 multi-token for outcome shares.
 /// @dev Deployed once. Will be cloned several times by proxies deployed by the Delphi factory. State changing functions are only callable by the Gateway contract.
@@ -66,11 +68,12 @@ contract DynamicParimutuelMarket is
     /// @inheritdoc IDynamicParimutuelMarket
     uint256 public override outcomeSuppliesSum;
     /// @inheritdoc IDynamicParimutuelMarket
-    bool public override marketCreationSharesLiquidated;
+    // bool public override marketCreationSharesLiquidated;
 
     // ===== LIBRARIES =====
     using DynamicParimutuelMath for uint256;
     using SafeERC20 for IERC20Metadata;
+    using LmsrMath for uint256;
 
     // ===== MODIFIERS =====
 
@@ -157,8 +160,12 @@ contract DynamicParimutuelMarket is
             revert ZeroMarketCreatorAddress();
         }
 
+        // maxLoss = b * ln(outcomeCount)
+        // b = maxLoss / ln(outcomeCount)
+        uint256 b = initialLiquidity_ / newMarketConfig_.outcomeCount._computeLnLowerBound();
+
         // Checks: Validate new market config
-        _validateDynamicParimutuelConfig(newMarketConfig_);
+        _validateDynamicParimutuelConfig(newMarketConfig_, b);
 
         // Checks: Validate new market metadata
         _validateVerifiableUri(newMarketMetadata_);
@@ -171,24 +178,10 @@ contract DynamicParimutuelMarket is
             revert InitialLiquidityTooHigh(initialLiquidity_, MAX_INITIAL_LIQUIDITY);
         }
 
-        // Calculate shares per outcome
-        marketCreatorSharesPerOutcome = newMarketConfig_.b
-            .sharesPerOutcomeAtMarketCreation({
-                outcomeCount: newMarketConfig_.outcomeCount,
-                initialLiquidity: initialLiquidity_,
-                tokenDecimalScalar: TOKEN_DECIMAL_SCALER
-            });
-        assert(marketCreatorSharesPerOutcome > 0);
-
-        // Calculate initial pool
-        uint256 initialPool = initialLiquidity_.poolAtCreation(newMarketConfig_.outcomeCount);
-        assert(initialPool > 0);
-
         // Checks: Ensure market is properly funded
         uint256 tokenBalance = TOKEN.balanceOf(address(this));
-        uint256 maxLoss_ = newMarketConfig_.b.maxLossUp(newMarketConfig_.outcomeCount, TOKEN_DECIMAL_SCALER);
-        if (tokenBalance < maxLoss_) {
-            revert MarketNotProperlyFunded(tokenBalance, maxLoss_);
+        if (tokenBalance < initialLiquidity_) {
+            revert MarketNotProperlyFunded(tokenBalance, initialLiquidity_);
         }
 
         // Effects: Set initialization immutables
@@ -197,23 +190,9 @@ contract DynamicParimutuelMarket is
 
         // Effects: Save new market
         _market.config = newMarketConfig_;
-        _market.pool = initialPool;
+        _market.pool = initialLiquidity_;
         _market.winningOutcomeIdx = type(uint256).max; // Note: Sentinel value for "no winner yet"
         _market.expSum = newMarketConfig_.outcomeCount * 1e18;
-
-        // // For each outcome
-        // for (uint256 outcomeIdx = 0; outcomeIdx < newMarketConfig_.outcomeCount; outcomeIdx++) {
-        //     // Effects: Mint market creator shares per outcome
-        //     /**
-        //      * Note:
-        //      * To ensure the market creator has "skin in the game", these shares should be locked in the contract until settlement/liquidation.
-        //      * Therefore, they are minted to address(this), instead of to the market creator.
-        //      */
-        //     _mint(address(this), outcomeIdx, marketCreatorSharesPerOutcome);
-        // }
-
-        // Interactions: Send all token balance (except initial pool) to TRADING_FEES_RECIPIENT
-        // TOKEN.safeTransfer(TRADING_FEES_RECIPIENT, tokenBalance - initialPool);
     }
 
     // ===== EXTERNAL FUNCTIONS =====
@@ -229,7 +208,7 @@ contract DynamicParimutuelMarket is
         (uint256 netTokensIn, uint256 feeAmount) = tokensIn.deductFee(_market.config.tradingFee);
 
         // Checks: Validate buy
-        (uint256 newExpSum, bool valid) = _market.config.b
+        (uint256 newExpSum, bool valid) = _market.b
             .buyIsValid({
                 currentZ: _market.expSum,
                 outcomeCurrentSupply: totalSupply(outcomeIdx),
@@ -272,7 +251,7 @@ contract DynamicParimutuelMarket is
         }
 
         // Checks: Validate sell
-        (uint256 newExpSum, bool valid) = _market.config.b
+        (uint256 newExpSum, bool valid) = _market.b
             .sellIsValid({
                 currentZ: _market.expSum,
                 outcomeCurrentSupply: totalSupply(outcomeIdx),
@@ -316,10 +295,7 @@ contract DynamicParimutuelMarket is
         uint256 tradingFees = _market.tradingFees;
 
         // Calculate market creator reward
-        uint256 marketCreatorReward = _market.pool
-            .redeemerReward({
-                redeemerWinningShares: marketCreatorSharesPerOutcome, unclaimedShares: totalSupply(winningOutcomeIdx)
-            });
+        uint256 marketCreatorReward = balanceOf(marketCreator, _market.winningOutcomeIdx);
 
         // Effects: Update market
         _market.winningOutcomeIdx = winningOutcomeIdx;
@@ -357,19 +333,24 @@ contract DynamicParimutuelMarket is
         }
 
         // Get unclaimed shares
-        uint256 unclaimedShares =
-            totalSupply(_market.winningOutcomeIdx) - balanceOf(address(this), _market.winningOutcomeIdx);
+        // uint256 unclaimedShares = totalSupply(_market.winningOutcomeIdx) - balanceOf(address(this), _market.winningOutcomeIdx);
 
         // Calculate tokens out
-        tokensOut = _market.pool.redeemerReward({redeemerWinningShares: sharesIn, unclaimedShares: unclaimedShares});
+        // tokensOut = _market.pool.redeemerReward({redeemerWinningShares: sharesIn, unclaimedShares: unclaimedShares});
 
         // Checks: Validate tokens out
-        if (tokensOut == 0) {
-            revert RedeemZeroTokensOut();
-        }
+        // if (tokensOut == 0) {
+        //     revert RedeemZeroTokensOut();
+        // }
+
+        // Effects: Burn winning outcome shares
+        _burn(msg.sender, _market.winningOutcomeIdx, sharesIn);
 
         // Effects: Pull winning outcome shares from the redeemer
-        _transfer({from: redeemer, to: address(this), id: _market.winningOutcomeIdx, amount: sharesIn});
+        // _transfer({from: redeemer, to: address(this), id: _market.winningOutcomeIdx, amount: sharesIn});
+
+        // Calculate tokens out (priced 1 to 1 with winning entry shares)
+        tokensOut = sharesIn / TOKEN_DECIMAL_SCALER;
 
         // Effects: Update market pool
         _market.pool -= tokensOut;
@@ -389,22 +370,15 @@ contract DynamicParimutuelMarket is
         ifStatus(MarketStatus.EXPIRED)
         returns (uint256[] memory sharesIn, uint256 totalTokensOut)
     {
+        require(liquidator != marketCreator, "market creator cannot liquidate");
+
         // Checks: Ensure outcomeIndices isn't empty
         if (outcomeIndices.length == 0) {
             revert EmptyOutcomeIndices();
         }
 
-        // If market creation shares haven't been liquidated
-        if (!marketCreationSharesLiquidated) {
-            // Effects/Interactions: Liquidate market creation shares
-            _liquidateMarketCreationShares();
-        }
-
         // Effects: Initialize array lengths
         sharesIn = new uint256[](outcomeIndices.length);
-
-        // Initialize sum var
-        uint256 numeratorSum36 = 0;
 
         // For each outcome index
         for (uint256 i = 0; i < outcomeIndices.length; i++) {
@@ -422,21 +396,12 @@ contract DynamicParimutuelMarket is
             // Update shares in array
             sharesIn[i] = _sharesIn;
 
-            // Update sum var
-            numeratorSum36 += _sharesIn * totalSupply(outcomeIdx);
+            totalTokensOut += (sharesIn * outcomePrice) / 1e18;
 
             // Effects: Pull outcome shares (don't burn them, to keep the prices frozen)
             // Note: Do not burn, to keep liquidations order-independent
             _transfer({from: liquidator, to: address(this), id: outcomeIdx, amount: _sharesIn});
         }
-
-        // Calculate total tokens out
-        totalTokensOut = _market.config.b
-            .liquidatorTotalReward({
-                numeratorSum: numeratorSum36 / 1e18,
-                currentSumTerm36: _market.sumTerm36,
-                tokenDecimalScalar: TOKEN_DECIMAL_SCALER
-            });
 
         // Effects: Update market pool
         _market.pool -= totalTokensOut;
@@ -448,20 +413,6 @@ contract DynamicParimutuelMarket is
 
         // Interactions: Push tokens out
         TOKEN.safeTransfer(liquidator, totalTokensOut);
-    }
-
-    /// @inheritdoc IDynamicParimutuelMarket
-    function liquidateMarketCreationShares()
-        external
-        nonReentrant
-        onlyGateway
-        ifStatus(MarketStatus.EXPIRED)
-        returns (uint256 _totalTokensOut)
-    {
-        if (marketCreationSharesLiquidated) {
-            revert MarketCreationSharesAlreadyLiquidated();
-        }
-        return _liquidateMarketCreationShares();
     }
 
     // ===== EXTERNAL VIEW FUNCTIONS =====
@@ -622,35 +573,11 @@ contract DynamicParimutuelMarket is
         }
     }
 
-    /// @dev Liquidates the market creator's initial shares and sends the proceeds plus the accrued trading fees to the trading-fees recipient.
-    /// @return tokensOut The total tokens sent to the trading-fees recipient.
-    function _liquidateMarketCreationShares() internal returns (uint256 tokensOut) {
-        // Checks: Ensure market creation shares haven't already been liquidated
-        assert(!marketCreationSharesLiquidated);
-
-        // Get vars
-        uint256 _marketCreationSharesValue = marketCreationSharesValue();
-        uint256 tradingFees = _market.tradingFees;
-
-        // Effects: Update market
-        _market.pool -= _marketCreationSharesValue;
-        _market.tradingFees = 0;
-
-        // Effects: Mark market creation shares as liquidated
-        marketCreationSharesLiquidated = true;
-
-        // Interactions: Send  to TRADING_FEES_RECIPIENT
-        TOKEN.safeTransfer(TRADING_FEES_RECIPIENT, _marketCreationSharesValue + tradingFees);
-
-        // Return
-        return _marketCreationSharesValue + tradingFees;
-    }
-
     // ===== INTERNAL VIEW FUNCTIONS ====
 
     /// @dev Validates all fields of a MarketConfig struct against the allowed bounds.
     /// @param config The market configuration to validate.
-    function _validateDynamicParimutuelConfig(MarketConfig memory config) internal view {
+    function _validateDynamicParimutuelConfig(MarketConfig memory config, uint256 b) internal view {
         // Validate outcome count
         if (config.outcomeCount < MIN_OUTCOME_COUNT) {
             revert OutcomeCountTooLow(config.outcomeCount, MIN_OUTCOME_COUNT);
@@ -659,12 +586,12 @@ contract DynamicParimutuelMarket is
             revert OutcomeCountTooHigh(config.outcomeCount, MAX_OUTCOME_COUNT);
         }
 
-        // Validate k
-        if (config.b < MIN_B) {
-            revert KTooLow(config.b, MIN_B);
+        // Validate b
+        if (b < MIN_B) {
+            revert KTooLow(b, MIN_B);
         }
-        if (config.b > MAX_B) {
-            revert KTooHigh(config.b, MAX_B);
+        if (b > MAX_B) {
+            revert KTooHigh(b, MAX_B);
         }
 
         // Validate trading fee

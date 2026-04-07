@@ -128,7 +128,7 @@ interface IDynamicParimutuelMarket is
 
     /// @notice Liquidates the market creator's initial shares from an expired market. Only callable by the gateway.
     /// @return _totalTokensOut The total tokens sent to the trading fees recipient.
-    function liquidateMarketCreationShares() external returns (uint256 _totalTokensOut);
+    // function liquidateMarketCreationShares() external returns (uint256 _totalTokensOut);
 
     /// @notice Liquidates a user's shares from an expired market. Only callable by the gateway.
     /// @param liquidator The address liquidating shares.
@@ -202,7 +202,7 @@ interface IDynamicParimutuelMarket is
     function marketCreatorSharesPerOutcome() external view returns (uint256);
 
     /// @return Whether the market creator's initial shares have been liquidated.
-    function marketCreationSharesLiquidated() external view returns (bool);
+    // function marketCreationSharesLiquidated() external view returns (bool);
 
     /// @return tokensOut The current token value of the market creator's initial shares.
     function marketCreationSharesValue() external view returns (uint256 tokensOut);

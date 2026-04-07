@@ -49,7 +49,7 @@ contract CreateMarket_Script is BaseScript {
             newMarketMetadata: _getVerifiableUriFromJson(json, ".newMarketMetadata"),
             newMarketConfig: IDynamicParimutuelMarketTypes.MarketConfig({
                 outcomeCount: json.readUint(".newMarketConfig.outcomeCount"),
-                b: json.readUint(".newMarketConfig.b"),
+                // b: json.readUint(".newMarketConfig.b"),
                 tradingFee: json.readUint(".newMarketConfig.tradingFee"),
                 tradingDeadline: json.readUint(".newMarketConfig.tradingDeadline"),
                 settlementDeadline: json.readUint(".newMarketConfig.settlementDeadline")

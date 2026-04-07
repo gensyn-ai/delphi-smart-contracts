@@ -182,15 +182,6 @@ contract DynamicParimutuelGateway is IDynamicParimutuelGateway, Initializable {
     }
 
     /// @inheritdoc IDynamicParimutuelGateway
-    function liquidateMarketCreationShares(IDynamicParimutuelMarket marketProxy)
-        external
-        ifDeployedByFactory(marketProxy)
-        returns (uint256 _totalTokensOut)
-    {
-        return IDynamicParimutuelMarket(marketProxy).liquidateMarketCreationShares();
-    }
-
-    /// @inheritdoc IDynamicParimutuelGateway
     function liquidate(IDynamicParimutuelMarket marketProxy, uint256[] memory outcomeIndices)
         external
         ifDeployedByFactory(marketProxy)
@@ -348,8 +339,8 @@ contract DynamicParimutuelGateway is IDynamicParimutuelGateway, Initializable {
         // Get market
         IDynamicParimutuelMarket.Market memory market = marketProxy.getMarket();
 
-        uint256 outcomeNewExp = ((outcomeCurrentSupply + sharesOut) * 1e18 / market.config.b)._computeExp();
-        uint256 outcomeCurrentExp = (outcomeCurrentSupply * 1e18 / market.config.b)._computeExp();
+        uint256 outcomeNewExp = ((outcomeCurrentSupply + sharesOut) * 1e18 / market.b)._computeExp();
+        uint256 outcomeCurrentExp = (outcomeCurrentSupply * 1e18 / market.b)._computeExp();
 
         // Calculate new sum term
         // Note: calculate most accurate approximation (nor upper nor lower bound)
@@ -375,7 +366,7 @@ contract DynamicParimutuelGateway is IDynamicParimutuelGateway, Initializable {
         uint256 ratioLn = ratio._computeLnUpperBound();
 
         // Calculate fee adjusted b
-        uint256 feeAdjustedB = market.config.b * (1e18 + market.config.tradingFee);
+        uint256 feeAdjustedB = market.b * (1e18 + market.config.tradingFee);
 
         // Checks: Calculate tokens in (with fee)
         // Note: To round against the user, we ceil the division
@@ -427,8 +418,8 @@ contract DynamicParimutuelGateway is IDynamicParimutuelGateway, Initializable {
         // Get market
         IDynamicParimutuelMarket.Market memory market = marketProxy.getMarket();
 
-        uint256 outcomeNewExp = (outcomeNewSupply * 1e18 / market.config.b)._computeExp();
-        uint256 outcomeCurrentExp = (outcomeCurrentSupply * 1e18 / market.config.b)._computeExp();
+        uint256 outcomeNewExp = (outcomeNewSupply * 1e18 / market.b)._computeExp();
+        uint256 outcomeCurrentExp = (outcomeCurrentSupply * 1e18 / market.b)._computeExp();
 
         // Calculate new sum term
         // Note: calculate most accurate approximation (nor upper nor lower bound)
@@ -459,7 +450,7 @@ contract DynamicParimutuelGateway is IDynamicParimutuelGateway, Initializable {
         uint256 ratioLn = ratio._computeLnLowerBound();
 
         // Calculate fee adjusted b
-        uint256 feeAdjustedB = market.config.b * (1e18 - market.config.tradingFee);
+        uint256 feeAdjustedB = market.b * (1e18 - market.config.tradingFee);
 
         // Calculate tokens out (with fee)
         // Note: To round against the user, we floor the division
@@ -649,14 +640,14 @@ contract DynamicParimutuelGateway is IDynamicParimutuelGateway, Initializable {
     }
 
     /// @inheritdoc IDynamicParimutuelGateway
-    function marketCreationSharesLiquidated(IDynamicParimutuelMarket marketProxy)
-        external
-        view
-        ifDeployedByFactory(marketProxy)
-        returns (bool)
-    {
-        return marketProxy.marketCreationSharesLiquidated();
-    }
+    // function marketCreationSharesLiquidated(IDynamicParimutuelMarket marketProxy)
+    //     external
+    //     view
+    //     ifDeployedByFactory(marketProxy)
+    //     returns (bool)
+    // {
+    //     return marketProxy.marketCreationSharesLiquidated();
+    // }
 
     /// @inheritdoc IDynamicParimutuelGateway
     function marketCreationSharesValue(IDynamicParimutuelMarket marketProxy)
