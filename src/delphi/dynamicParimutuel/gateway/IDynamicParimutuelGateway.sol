@@ -370,5 +370,5 @@ interface IDynamicParimutuelGateway is IDynamicParimutuelGatewayErrors {
     /// @notice Returns the current token value of the market creator's initial shares.
     /// @param marketProxy The market proxy contract.
     /// @return The token value of the creator's shares across all outcomes.
-    function marketCreationSharesValue(IDynamicParimutuelMarket marketProxy) external view returns (uint256);
+    // function marketCreationSharesValue(IDynamicParimutuelMarket marketProxy) external view returns (uint256);
 }

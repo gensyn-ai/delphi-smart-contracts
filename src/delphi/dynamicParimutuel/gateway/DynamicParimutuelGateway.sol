@@ -650,14 +650,14 @@ contract DynamicParimutuelGateway is IDynamicParimutuelGateway, Initializable {
     // }
 
     /// @inheritdoc IDynamicParimutuelGateway
-    function marketCreationSharesValue(IDynamicParimutuelMarket marketProxy)
-        external
-        view
-        ifDeployedByFactory(marketProxy)
-        returns (uint256 tokensOut)
-    {
-        return marketProxy.marketCreationSharesValue();
-    }
+    // function marketCreationSharesValue(IDynamicParimutuelMarket marketProxy)
+    //     external
+    //     view
+    //     ifDeployedByFactory(marketProxy)
+    //     returns (uint256 tokensOut)
+    // {
+    //     return marketProxy.marketCreationSharesValue();
+    // }
 
     // ========== INTERNAL FUNCTIONS ==========
 

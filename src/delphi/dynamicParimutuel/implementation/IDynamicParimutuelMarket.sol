@@ -205,5 +205,5 @@ interface IDynamicParimutuelMarket is
     // function marketCreationSharesLiquidated() external view returns (bool);
 
     /// @return tokensOut The current token value of the market creator's initial shares.
-    function marketCreationSharesValue() external view returns (uint256 tokensOut);
+    // function marketCreationSharesValue() external view returns (uint256 tokensOut);
 }

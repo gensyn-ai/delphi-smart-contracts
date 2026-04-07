@@ -233,59 +233,59 @@ contract DelphiUnit_Test is DelphiTestUtils, DelphiDeployer {
         });
     }
 
-    function test_CreateMarket_Reverts_KTooLow(
-        uint8 decimals,
-        uint256 marketCreationFee,
-        IEndToEndHandler.DeployMarketArgs memory args
-    ) external {
-        decimals = _setUp(decimals, marketCreationFee);
-        _useNewSender(CREATOR);
+    // function test_CreateMarket_Reverts_KTooLow(
+    //     uint8 decimals,
+    //     uint256 marketCreationFee,
+    //     IEndToEndHandler.DeployMarketArgs memory args
+    // ) external {
+    //     decimals = _setUp(decimals, marketCreationFee);
+    //     _useNewSender(CREATOR);
 
-        args.marketCreator = CREATOR;
-        args = _boundDeployMarketArgs(implementation, args);
-        args.newMarketConfig.b = bound(args.newMarketConfig.b, 0, implementation.MIN_B() - 1);
+    //     args.marketCreator = CREATOR;
+    //     args = _boundDeployMarketArgs(implementation, args);
+    //     args.newMarketConfig.b = bound(args.newMarketConfig.b, 0, implementation.MIN_B() - 1);
 
-        deal(address(token), CREATOR, args.initialLiquidity);
-        token.approve(address(delphiFactory), args.initialLiquidity);
+    //     deal(address(token), CREATOR, args.initialLiquidity);
+    //     token.approve(address(delphiFactory), args.initialLiquidity);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IDynamicParimutuelMarketErrors.KTooLow.selector, args.newMarketConfig.b, implementation.MIN_B()
-            )
-        );
-        delphiFactory.deployNewMarketProxy({
-            initialLiquidity_: args.initialLiquidity,
-            newMarketMetadata_: args.newMarketMetadata,
-            newMarketInitializationCalldata_: abi.encode(args.newMarketConfig)
-        });
-    }
+    //     vm.expectRevert(
+    //         abi.encodeWithSelector(
+    //             IDynamicParimutuelMarketErrors.KTooLow.selector, args.newMarketConfig.b, implementation.MIN_B()
+    //         )
+    //     );
+    //     delphiFactory.deployNewMarketProxy({
+    //         initialLiquidity_: args.initialLiquidity,
+    //         newMarketMetadata_: args.newMarketMetadata,
+    //         newMarketInitializationCalldata_: abi.encode(args.newMarketConfig)
+    //     });
+    // }
 
-    function test_CreateMarket_Reverts_KTooHigh(
-        uint8 decimals,
-        uint256 marketCreationFee,
-        IEndToEndHandler.DeployMarketArgs memory args
-    ) external {
-        decimals = _setUp(decimals, marketCreationFee);
-        _useNewSender(CREATOR);
+    // function test_CreateMarket_Reverts_KTooHigh(
+    //     uint8 decimals,
+    //     uint256 marketCreationFee,
+    //     IEndToEndHandler.DeployMarketArgs memory args
+    // ) external {
+    //     decimals = _setUp(decimals, marketCreationFee);
+    //     _useNewSender(CREATOR);
 
-        args.marketCreator = CREATOR;
-        args = _boundDeployMarketArgs(implementation, args);
-        args.newMarketConfig.b = bound(args.newMarketConfig.b, implementation.MAX_B() + 1, type(uint256).max);
+    //     args.marketCreator = CREATOR;
+    //     args = _boundDeployMarketArgs(implementation, args);
+    //     args.newMarketConfig.b = bound(args.newMarketConfig.b, implementation.MAX_B() + 1, type(uint256).max);
 
-        deal(address(token), CREATOR, args.initialLiquidity);
-        token.approve(address(delphiFactory), args.initialLiquidity);
+    //     deal(address(token), CREATOR, args.initialLiquidity);
+    //     token.approve(address(delphiFactory), args.initialLiquidity);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IDynamicParimutuelMarketErrors.KTooHigh.selector, args.newMarketConfig.b, implementation.MAX_B()
-            )
-        );
-        delphiFactory.deployNewMarketProxy({
-            initialLiquidity_: args.initialLiquidity,
-            newMarketMetadata_: args.newMarketMetadata,
-            newMarketInitializationCalldata_: abi.encode(args.newMarketConfig)
-        });
-    }
+    //     vm.expectRevert(
+    //         abi.encodeWithSelector(
+    //             IDynamicParimutuelMarketErrors.KTooHigh.selector, args.newMarketConfig.b, implementation.MAX_B()
+    //         )
+    //     );
+    //     delphiFactory.deployNewMarketProxy({
+    //         initialLiquidity_: args.initialLiquidity,
+    //         newMarketMetadata_: args.newMarketMetadata,
+    //         newMarketInitializationCalldata_: abi.encode(args.newMarketConfig)
+    //     });
+    // }
 
     function test_CreateMarket_Reverts_TradingFeeTooLow(
         uint8 decimals,
@@ -702,7 +702,7 @@ contract DelphiUnit_Test is DelphiTestUtils, DelphiDeployer {
 
         IDynamicParimutuelMarketTypes.MarketConfig memory config = IDynamicParimutuelMarketTypes.MarketConfig({
             outcomeCount: implementation.MIN_OUTCOME_COUNT(),
-            b: implementation.MIN_B(),
+            // b: implementation.MIN_B(),
             tradingFee: implementation.MIN_TRADING_FEE(),
             tradingDeadline: block.timestamp + minTradingWindow,
             settlementDeadline: block.timestamp + minTradingWindow + implementation.MIN_SETTLEMENT_WINDOW()

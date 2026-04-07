@@ -33,7 +33,7 @@ abstract contract DynamicParimutuel_Invariants is Invariants_Base, DelphiTestUti
         uint256 marketOutcomeCount = market.getMarket().config.outcomeCount;
 
         // Get market k
-        uint256 b = market.getMarket().config.b;
+        uint256 b = market.getMarket().b;
 
         // For each model in the market
         for (uint256 outcomeIdx = 0; outcomeIdx < marketOutcomeCount; outcomeIdx++) {
@@ -47,24 +47,24 @@ abstract contract DynamicParimutuel_Invariants is Invariants_Base, DelphiTestUti
 
     function invariant_Prices_Sum() external view ifDeployed {
         // Get market
-        IDynamicParimutuelMarket market = handler.marketProxy();
+        IDynamicParimutuelMarket marketProxy = handler.marketProxy();
 
         // Get market config
-        IDynamicParimutuelMarket.MarketConfig memory marketConfig = market.getMarket().config;
+        IDynamicParimutuelMarket.Market memory market = marketProxy.getMarket();
 
         // Get token decimals
-        uint256 tokenDecimals = market.TOKEN().decimals();
+        uint256 tokenDecimals = marketProxy.TOKEN().decimals();
 
         // Calculate target prices sum
-        uint256 b = marketConfig.b / market.TOKEN_DECIMAL_SCALER();
-        uint256 maxPricesSum = b.mulDiv((marketConfig.outcomeCount * 1e36).sqrt(), ONE); // k * sqrt(outcomeCount)
+        uint256 b = market.b / marketProxy.TOKEN_DECIMAL_SCALER();
+        uint256 maxPricesSum = b.mulDiv((market.config.outcomeCount * 1e36).sqrt(), ONE); // k * sqrt(outcomeCount)
 
         // Initialize prices sum
         uint256 pricesSum;
 
         // For each model in the market
-        for (uint256 outcomeIdx = 0; outcomeIdx < marketConfig.outcomeCount; outcomeIdx++) {
-            pricesSum += market.spotPrice(outcomeIdx);
+        for (uint256 outcomeIdx = 0; outcomeIdx < market.config.outcomeCount; outcomeIdx++) {
+            pricesSum += marketProxy.spotPrice(outcomeIdx);
         }
 
         assertGeDecimal(pricesSum, _adjustDown(b, BASIS_POINT), tokenDecimals, "prices sum not >= k");
@@ -73,18 +73,18 @@ abstract contract DynamicParimutuel_Invariants is Invariants_Base, DelphiTestUti
 
     function invariant_PricesSquare_Sum() external view ifDeployed {
         // Get market
-        IDynamicParimutuelMarket market = handler.marketProxy();
+        IDynamicParimutuelMarket marketProxy = handler.marketProxy();
 
-        IDynamicParimutuelMarket.MarketConfig memory marketConfig = market.getMarket().config;
-        uint256 marketOutcomeCount = marketConfig.outcomeCount;
-        uint256 b = marketConfig.b;
+        IDynamicParimutuelMarket.Market memory market = marketProxy.getMarket();
+        uint256 marketOutcomeCount = market.config.outcomeCount;
+        uint256 b = market.b;
 
         uint256 priceSquareSum = 0;
         for (uint256 i = 0; i < marketOutcomeCount; i++) {
-            uint256 price = market.spotPrice(i);
+            uint256 price = marketProxy.spotPrice(i);
             priceSquareSum += price * price;
         }
-        uint256 tokenDecimalScalar = market.TOKEN_DECIMAL_SCALER();
+        uint256 tokenDecimalScalar = marketProxy.TOKEN_DECIMAL_SCALER();
         uint256 kSquared = b * b / (tokenDecimalScalar * tokenDecimalScalar);
         assertApproxEqRelDecimal(
             priceSquareSum, // left
@@ -183,21 +183,21 @@ abstract contract DynamicParimutuel_Invariants is Invariants_Base, DelphiTestUti
 
     function invariant_Terms_BelowSumTerm() external view ifDeployed {
         // Get market id
-        IDynamicParimutuelMarket market = handler.marketProxy();
+        IDynamicParimutuelMarket marketProxy = handler.marketProxy();
 
         // Get market info
-        IDynamicParimutuelMarket.Market memory marketInfo = market.getMarket();
+        IDynamicParimutuelMarket.Market memory market = marketProxy.getMarket();
 
         // Get market outcome count
-        uint256 marketOutcomeCount = marketInfo.config.outcomeCount;
+        uint256 marketOutcomeCount = market.config.outcomeCount;
 
         // Get current sum term
-        uint256 currentSumTerm36 = marketInfo.sumTerm36;
+        uint256 currentSumTerm36 = market.expSum;
 
         // For each outcome in the market
         for (uint256 outcomeIdx = 0; outcomeIdx < marketOutcomeCount; outcomeIdx++) {
             // Get outcome term
-            uint256 outcomeTerm36 = market.totalSupply(outcomeIdx) ** 2;
+            uint256 outcomeTerm36 = marketProxy.totalSupply(outcomeIdx) ** 2;
 
             // Ensure that the outcome term is always < sum term
             assertLt(outcomeTerm36, currentSumTerm36, "outcome term is not < sum term");
@@ -224,7 +224,7 @@ abstract contract DynamicParimutuel_Invariants is Invariants_Base, DelphiTestUti
         }
 
         // Ensure sum(outcome) = market.currentSumTerm
-        assertEq(termSum36, marketInfo.sumTerm36, "sum of outcome exps not = currentSumTerm");
+        assertEq(termSum36, marketInfo.expSum, "sum of outcome exps not = currentSumTerm");
     }
 
     // ========== PAYOUT TERMS ==========

@@ -397,14 +397,15 @@ contract DynamicParimutuelMarket is
             sharesIn[i] = _sharesIn;
 
             // Get outcome price
-            uint outcomePrice = _market.b.spotPrice({
-                outcomeSupply: totalSupply(outcomeIdx),
-                expSum: _market.expSum,
-                tokenDecimalScalar: TOKEN_DECIMAL_SCALER
-            });
+            uint256 outcomePrice = _market.b
+                .spotPrice({
+                    outcomeSupply: totalSupply(outcomeIdx),
+                    expSum: _market.expSum,
+                    tokenDecimalScalar: TOKEN_DECIMAL_SCALER
+                });
 
             // Increase total tokens out
-            totalTokensOut += (sharesIn * outcomePrice) / 1e18;
+            totalTokensOut += (_sharesIn * outcomePrice) / 1e18;
 
             // Effects: Pull outcome shares (don't burn them, to keep the prices frozen)
             // Note: Do not burn, to keep liquidations order-independent
@@ -513,11 +514,9 @@ contract DynamicParimutuelMarket is
 
     /// @inheritdoc IDynamicParimutuelMarket
     function spotPrice(uint256 outcomeIdx) public view validOutcomeIdx(outcomeIdx) returns (uint256) {
-        return _market.config.b
+        return _market.b
             .spotPrice({
-                outcomeSupply: totalSupply(outcomeIdx),
-                currentSumTerm36: _market.sumTerm36,
-                tokenDecimalScalar: TOKEN_DECIMAL_SCALER
+                outcomeSupply: totalSupply(outcomeIdx), expSum: _market.expSum, tokenDecimalScalar: TOKEN_DECIMAL_SCALER
             });
     }
 
@@ -532,7 +531,7 @@ contract DynamicParimutuelMarket is
 
     /// @inheritdoc IDynamicParimutuelMarket
     function spotImpliedProbability(uint256 outcomeIdx) public view validOutcomeIdx(outcomeIdx) returns (uint256) {
-        return totalSupply(outcomeIdx).spotImpliedProbability({currentSumTerm36: _market.sumTerm36});
+        return spotPrice(outcomeIdx);
     }
 
     /// @inheritdoc IDynamicParimutuelMarket
@@ -549,14 +548,14 @@ contract DynamicParimutuelMarket is
     }
 
     /// @inheritdoc IDynamicParimutuelMarket
-    function marketCreationSharesValue() public view returns (uint256 tokensOut) {
-        return _market.config.b
-            .liquidatorTotalReward({
-                numeratorSum: outcomeSuppliesSum.mulDivDown(marketCreatorSharesPerOutcome, 1e18), // Note: round down (against user)
-                currentSumTerm36: _market.sumTerm36,
-                tokenDecimalScalar: TOKEN_DECIMAL_SCALER
-            });
-    }
+    // function marketCreationSharesValue() public view returns (uint256 tokensOut) {
+    //     return _market..b
+    //         .liquidatorTotalReward({
+    //             numeratorSum: outcomeSuppliesSum.mulDivDown(marketCreatorSharesPerOutcome, 1e18), // Note: round down (against user)
+    //             currentSumTerm36: _market.sumTerm36,
+    //             tokenDecimalScalar: TOKEN_DECIMAL_SCALER
+    //         });
+    // }
 
     // ===== INTERNAL FUNCTIONS ====
 

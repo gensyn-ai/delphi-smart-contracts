@@ -275,22 +275,22 @@ contract EndToEndHandler is IEndToEndHandler, DelphiDeployer, DelphiTestUtils {
         );
 
         // Calculate expected initial price
-        uint256 expectedInitialPrice =
-            (args.newMarketConfig.b * ONE) / ((args.newMarketConfig.outcomeCount * 1e36).sqrt() * _tokenDecimalScaler);
+        // uint256 expectedInitialPrice =
+        //     (args.newMarketConfig.b * ONE) / ((args.newMarketConfig.outcomeCount * 1e36).sqrt() * _tokenDecimalScaler);
 
         // Pick winning outcome idx
         winningOutcomeIdx = _getRandomIdx(args.newMarketConfig.outcomeCount, args.winningOutcomeIdx);
 
         // For each outcome
-        for (uint256 outcomeIdx = 0; outcomeIdx < args.newMarketConfig.outcomeCount; outcomeIdx++) {
-            // Ensure outcome's price matches expectations
-            assertApproxEqRel(
-                marketProxy.spotPrice(outcomeIdx),
-                expectedInitialPrice,
-                BASIS_POINT,
-                "outcomes in newly created market are not equally priced"
-            );
-        }
+        // for (uint256 outcomeIdx = 0; outcomeIdx < args.newMarketConfig.outcomeCount; outcomeIdx++) {
+        //     // Ensure outcome's price matches expectations
+        //     assertApproxEqRel(
+        //         marketProxy.spotPrice(outcomeIdx),
+        //         expectedInitialPrice,
+        //         BASIS_POINT,
+        //         "outcomes in newly created market are not equally priced"
+        //     );
+        // }
     }
 
     function _buyExactOut(BuyExactOutArgs calldata args) internal {

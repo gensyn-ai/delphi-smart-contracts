@@ -262,7 +262,7 @@ contract DelphiFork_Test is DelphiDeployer, DelphiTestUtils {
             newMarketInitializationCalldata_: abi.encode(
                 IDynamicParimutuelMarketTypes.MarketConfig({
                     outcomeCount: outcomeCount,
-                    b: bound(args.b, implementation.MIN_B(), implementation.MAX_B()),
+                    // b: bound(args.b, implementation.MIN_B(), implementation.MAX_B()),
                     tradingFee: bound(
                         args.tradingFee, implementation.MIN_TRADING_FEE(), implementation.MAX_TRADING_FEE()
                     ),
