@@ -21,6 +21,9 @@ import {IDelphiFactory} from "src/delphi/factory/IDelphiFactory.sol";
 import {DynamicParimutuelMath} from "src/delphi/dynamicParimutuel/math/DynamicParimutuelMath.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+import {LmsrMath} from "src/delphi/dynamicParimutuel/math/LmsrMath.sol";
+
 /// @title DynamicParimutuelGateway
 /// @notice Entry point for interacting with dynamic parimutuel markets.
 /// @dev After validating it was deployed by the registered factory, the gateway calls the market proxy (which in turn calls the market implementation).
@@ -50,6 +53,8 @@ contract DynamicParimutuelGateway is IDynamicParimutuelGateway, Initializable {
     // ========== LIBRARIES ==========
     using DynamicParimutuelMath for uint256;
     using SafeERC20 for IERC20Metadata;
+    using Math for uint256;
+    using LmsrMath for uint256;
 
     // ========== CONSTRUCTOR ==========
     constructor(IERC20Metadata token_) {
@@ -343,32 +348,46 @@ contract DynamicParimutuelGateway is IDynamicParimutuelGateway, Initializable {
         // Get market
         IDynamicParimutuelMarket.Market memory market = marketProxy.getMarket();
 
+        uint256 outcomeNewExp = ((outcomeCurrentSupply + sharesOut) * 1e18 / market.config.b)._computeExp();
+        uint256 outcomeCurrentExp = (outcomeCurrentSupply * 1e18 / market.config.b)._computeExp();
+
         // Calculate new sum term
         // Note: calculate most accurate approximation (nor upper nor lower bound)
-        uint256 newSumTerm36 = market.sumTerm36 + sharesOut * ((2 * outcomeCurrentSupply) + sharesOut);
+        uint newExpSum = market.expSum + outcomeNewExp - outcomeCurrentExp;
 
         // Checks: Ensure new sum term exceeds current one
-        assert(newSumTerm36 > market.sumTerm36);
+        assert(newExpSum > market.expSum);
 
         // Calculate sum term square roots
         // Note: Every operation is rounded against the user
-        uint256 c1Sqrt = newSumTerm36.sqrtUp();
-        uint256 c0Sqrt = market.sumTerm36.sqrtDown();
+        uint newExpSumUpperBound = newExpSum._getExpUpperBound();
+        uint currentExpSumLowerBound = market.expSum._getExpLowerBound();
 
         // Checks: Validate sum term square roots
-        assert(c1Sqrt > c0Sqrt);
+        assert(newExpSumUpperBound > currentExpSumLowerBound);
 
-        // Checks: Calculate net tokens in (no fees)
-        // Note: Every operation is rounded aagainst the user
-        uint256 netTokensIn = market.config.b.mulDivUp(c1Sqrt - c0Sqrt, 1e18 * TOKEN_DECIMAL_SCALER);
+        // Calculate ratio
+        // Note: Ceil the div to round against the user
+        uint256 ratio = newExpSumUpperBound.mulDiv(1e18, currentExpSumLowerBound, Math.Rounding.Ceil);
+        assert(ratio > 1e18);
 
-        // Checks: Validate net tokens in
-        if (netTokensIn == 0) {
-            revert ZeroNetTokensIn();
-        }
+        // Calculate the upper bound of ln of ratio (to round against the user)
+        uint256 ratioLn = ratio._computeLnUpperBound();
 
-        // Add trading fee to net tokens in
-        (tokensIn,) = netTokensIn.addFee(market.config.tradingFee);
+        // Calculate fee adjusted b
+        uint256 feeAdjustedB = market.config.b * (1e18 + market.config.tradingFee);
+
+        // Checks: Calculate tokens in (with fee)
+        // Note: To round against the user, we ceil the division
+        tokensIn = feeAdjustedB.mulDiv(ratioLn, 1e36 * TOKEN_DECIMAL_SCALER, Math.Rounding.Ceil);
+
+        // // Checks: Validate net tokens in
+        // if (netTokensIn == 0) {
+        //     revert ZeroNetTokensIn();
+        // }
+
+        // // Add trading fee to net tokens in
+        // (tokensIn,) = netTokensIn.addFee(market.config.tradingFee);
 
         // Checks: Validate tokens in
         if (tokensIn < MIN_TOKENS_DELTA) {
@@ -408,34 +427,51 @@ contract DynamicParimutuelGateway is IDynamicParimutuelGateway, Initializable {
         // Get market
         IDynamicParimutuelMarket.Market memory market = marketProxy.getMarket();
 
+        uint256 outcomeNewExp = (outcomeNewSupply * 1e18 / market.config.b)._computeExp();
+        uint256 outcomeCurrentExp = (outcomeCurrentSupply * 1e18 / market.config.b)._computeExp();
+
         // Calculate new sum term
         // Note: calculate most accurate approximation (nor upper nor lower bound)
-        uint256 newSumTerm36 = market.sumTerm36 - sharesIn * ((2 * outcomeCurrentSupply) - sharesIn);
+        // uint256 newSumTerm36 = market.sumTerm36 - sharesIn * ((2 * outcomeCurrentSupply) - sharesIn);
+        uint newExpSum = market.expSum + outcomeNewExp - outcomeCurrentExp;
 
         // Checks: Ensure new sum term is below current one
-        assert(newSumTerm36 < market.sumTerm36);
+        // assert(newSumTerm36 < market.sumTerm36);
+        assert(newExpSum < market.expSum);
 
         // Calculate sum term square roots
         // Note: Every operation is rounded against the user
-        uint256 c0Sqrt = market.sumTerm36.sqrtDown();
-        uint256 c1Sqrt = newSumTerm36.sqrtUp();
+        uint256 newExpSumUpperBound = newExpSum._getExpUpperBound();
+        uint256 currentExpSumLowerBound = market.expSum._getExpLowerBound();
 
         // Checks: Validate sum term square roots
-        if (c0Sqrt < c1Sqrt) {
+        if (newExpSumUpperBound > currentExpSumLowerBound) {
             revert SellOverlap();
         }
 
-        // Calculate gross tokens out (no fees)
-        // Note: Every operation is rounded against the user
-        uint256 grossTokensOut = market.config.b.mulDivDown(c0Sqrt - c1Sqrt, 1e18 * TOKEN_DECIMAL_SCALER);
+        // Calculate ratio
+        // Note: instead of negating the log input (which causes numerical instability) and the output, flip the ratio
+        // Note: Floor the div to round against the user
+        uint256 ratio = currentExpSumLowerBound.mulDiv(1e18, newExpSumUpperBound, Math.Rounding.Floor);
+        assert(ratio > 1e18);
 
-        // Checks: Validate gross tokens out
-        if (grossTokensOut == 0) {
-            revert GrossTokensOutNotPositive();
-        }
+        // Calculate lower bound of ln of ratio (to round against the user)
+        uint256 ratioLn = ratio._computeLnLowerBound();
 
-        // Deduct trading fee from gross tokens out
-        (tokensOut,) = grossTokensOut.deductFee(market.config.tradingFee);
+        // Calculate fee adjusted b
+        uint256 feeAdjustedB = market.config.b * (1e18 - market.config.tradingFee);
+
+        // Calculate tokens out (with fee)
+        // Note: To round against the user, we floor the division
+        tokensOut = feeAdjustedB.mulDiv(ratioLn, 1e36 * TOKEN_DECIMAL_SCALER, Math.Rounding.Floor);
+
+        // // Checks: Validate gross tokens out
+        // if (grossTokensOut == 0) {
+        //     revert GrossTokensOutNotPositive();
+        // }
+
+        // // Deduct trading fee from gross tokens out
+        // (tokensOut,) = grossTokensOut.deductFee(market.config.tradingFee);
 
         // Checks: Validate tokens out
         if (tokensOut < MIN_TOKENS_DELTA) {
