@@ -272,4 +272,8 @@ library DynamicParimutuelMath {
     function mulDivDown(uint256 a, uint256 b, uint256 denominator) internal pure returns (uint256) {
         return a.mulDiv(b, denominator, Math.Rounding.Floor);
     }
+
+    function maxLossUp(uint256 b, uint256 modelCount, uint256 tokenDecimalScalar) internal pure returns (uint256) {
+        return b.mulDiv((modelCount * 1e18)._computeLnUpperBound(), 1e18 * tokenDecimalScalar, Math.Rounding.Ceil);
+    }
 }

@@ -186,8 +186,9 @@ contract DynamicParimutuelMarket is
 
         // Checks: Ensure market is properly funded
         uint256 tokenBalance = TOKEN.balanceOf(address(this));
-        if (tokenBalance < initialLiquidity_) {
-            revert MarketNotProperlyFunded(tokenBalance, initialLiquidity_);
+        uint256 maxLoss_ = newMarketConfig_.b.maxLossUp(newMarketConfig_.outcomeCount, TOKEN_DECIMAL_SCALER);
+        if (tokenBalance < maxLoss_) {
+            revert MarketNotProperlyFunded(tokenBalance, maxLoss_);
         }
 
         // Effects: Set initialization immutables
@@ -198,22 +199,21 @@ contract DynamicParimutuelMarket is
         _market.config = newMarketConfig_;
         _market.pool = initialPool;
         _market.winningOutcomeIdx = type(uint256).max; // Note: Sentinel value for "no winner yet"
-        _market.sumTerm36 = (marketCreatorSharesPerOutcome ** 2) * newMarketConfig_.outcomeCount;
-        assert(_market.sumTerm36 > 0);
+        _market.expSum = newMarketConfig_.outcomeCount * 1e18;
 
-        // For each outcome
-        for (uint256 outcomeIdx = 0; outcomeIdx < newMarketConfig_.outcomeCount; outcomeIdx++) {
-            // Effects: Mint market creator shares per outcome
-            /**
-             * Note:
-             * To ensure the market creator has "skin in the game", these shares should be locked in the contract until settlement/liquidation.
-             * Therefore, they are minted to address(this), instead of to the market creator.
-             */
-            _mint(address(this), outcomeIdx, marketCreatorSharesPerOutcome);
-        }
+        // // For each outcome
+        // for (uint256 outcomeIdx = 0; outcomeIdx < newMarketConfig_.outcomeCount; outcomeIdx++) {
+        //     // Effects: Mint market creator shares per outcome
+        //     /**
+        //      * Note:
+        //      * To ensure the market creator has "skin in the game", these shares should be locked in the contract until settlement/liquidation.
+        //      * Therefore, they are minted to address(this), instead of to the market creator.
+        //      */
+        //     _mint(address(this), outcomeIdx, marketCreatorSharesPerOutcome);
+        // }
 
         // Interactions: Send all token balance (except initial pool) to TRADING_FEES_RECIPIENT
-        TOKEN.safeTransfer(TRADING_FEES_RECIPIENT, tokenBalance - initialPool);
+        // TOKEN.safeTransfer(TRADING_FEES_RECIPIENT, tokenBalance - initialPool);
     }
 
     // ===== EXTERNAL FUNCTIONS =====
@@ -229,7 +229,7 @@ contract DynamicParimutuelMarket is
         (uint256 netTokensIn, uint256 feeAmount) = tokensIn.deductFee(_market.config.tradingFee);
 
         // Checks: Validate buy
-        (uint256 newSumTerm36, bool valid) = _market.config.b
+        (uint256 newExpSum, bool valid) = _market.config.b
             .buyIsValid({
                 currentZ: _market.expSum,
                 outcomeCurrentSupply: totalSupply(outcomeIdx),
@@ -242,7 +242,7 @@ contract DynamicParimutuelMarket is
         }
 
         // Effects: Update market
-        _market.sumTerm36 = newSumTerm36;
+        _market.expSum = newExpSum;
         _market.pool += netTokensIn;
         _market.tradingFees += feeAmount;
 
@@ -272,7 +272,7 @@ contract DynamicParimutuelMarket is
         }
 
         // Checks: Validate sell
-        (uint256 newSumTerm36, bool valid) = _market.config.b
+        (uint256 newExpSum, bool valid) = _market.config.b
             .sellIsValid({
                 currentZ: _market.expSum,
                 outcomeCurrentSupply: totalSupply(outcomeIdx),
@@ -285,7 +285,7 @@ contract DynamicParimutuelMarket is
         }
 
         // Effects: Update market
-        _market.sumTerm36 = newSumTerm36;
+        _market.expSum = newExpSum;
         _market.pool -= grossTokensOut;
         _market.tradingFees += feeAmount;
 

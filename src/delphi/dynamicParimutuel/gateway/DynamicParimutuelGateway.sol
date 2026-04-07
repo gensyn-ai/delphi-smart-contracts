@@ -353,15 +353,15 @@ contract DynamicParimutuelGateway is IDynamicParimutuelGateway, Initializable {
 
         // Calculate new sum term
         // Note: calculate most accurate approximation (nor upper nor lower bound)
-        uint newExpSum = market.expSum + outcomeNewExp - outcomeCurrentExp;
+        uint256 newExpSum = market.expSum + outcomeNewExp - outcomeCurrentExp;
 
         // Checks: Ensure new sum term exceeds current one
         assert(newExpSum > market.expSum);
 
         // Calculate sum term square roots
         // Note: Every operation is rounded against the user
-        uint newExpSumUpperBound = newExpSum._getExpUpperBound();
-        uint currentExpSumLowerBound = market.expSum._getExpLowerBound();
+        uint256 newExpSumUpperBound = newExpSum._getExpUpperBound();
+        uint256 currentExpSumLowerBound = market.expSum._getExpLowerBound();
 
         // Checks: Validate sum term square roots
         assert(newExpSumUpperBound > currentExpSumLowerBound);
@@ -433,7 +433,7 @@ contract DynamicParimutuelGateway is IDynamicParimutuelGateway, Initializable {
         // Calculate new sum term
         // Note: calculate most accurate approximation (nor upper nor lower bound)
         // uint256 newSumTerm36 = market.sumTerm36 - sharesIn * ((2 * outcomeCurrentSupply) - sharesIn);
-        uint newExpSum = market.expSum + outcomeNewExp - outcomeCurrentExp;
+        uint256 newExpSum = market.expSum + outcomeNewExp - outcomeCurrentExp;
 
         // Checks: Ensure new sum term is below current one
         // assert(newSumTerm36 < market.sumTerm36);
