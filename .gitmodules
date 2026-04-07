@@ -7,3 +7,6 @@
 [submodule "lib/safe-contracts"]
 	path = lib/safe-contracts
 	url = https://github.com/safe-global/safe-contracts
+[submodule "lib/balancer-v3-monorepo"]
+	path = lib/balancer-v3-monorepo
+	url = https://github.com/balancer/balancer-v3-monorepo

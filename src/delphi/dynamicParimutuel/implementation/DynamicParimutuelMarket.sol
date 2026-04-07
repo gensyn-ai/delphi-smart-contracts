@@ -231,8 +231,8 @@ contract DynamicParimutuelMarket is
         // Checks: Validate buy
         (uint256 newSumTerm36, bool valid) = _market.config.b
             .buyIsValid({
-                currentSumTerm36: _market.sumTerm36,
-                modelCurrentSupply: totalSupply(outcomeIdx),
+                currentZ: _market.expSum,
+                outcomeCurrentSupply: totalSupply(outcomeIdx),
                 tokensIn: netTokensIn,
                 sharesOut: sharesOut,
                 tokenDecimalScalar: TOKEN_DECIMAL_SCALER
@@ -274,8 +274,8 @@ contract DynamicParimutuelMarket is
         // Checks: Validate sell
         (uint256 newSumTerm36, bool valid) = _market.config.b
             .sellIsValid({
-                currentSumTerm36: _market.sumTerm36,
-                modelCurrentSupply: totalSupply(outcomeIdx),
+                currentZ: _market.expSum,
+                outcomeCurrentSupply: totalSupply(outcomeIdx),
                 sharesIn: sharesIn,
                 tokensOut: grossTokensOut,
                 tokenDecimalScalar: TOKEN_DECIMAL_SCALER

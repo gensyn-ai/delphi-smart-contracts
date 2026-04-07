@@ -6,7 +6,7 @@ interface IDynamicParimutuelMarketTypes {
         MarketConfig config; // Market Config (specified by the Market Creator)
         uint256 pool;
         uint256 tradingFees;
-        uint256 sumTerm36; // supply(outcome1)^2 + supply(outcome2)^2 + ... + supply(outcomeN)^2
+        uint256 expSum;
 
         // Initialized to max uint256, this sentinel value signals that no winning outcome is set yet.
         // Can ONLY be set by the creator while the market is AWAITING_SETTLEMENT.

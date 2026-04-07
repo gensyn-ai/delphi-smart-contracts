@@ -3,6 +3,7 @@ pragma solidity 0.8.30;
 
 // Libraries
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+import {LmsrMath} from "./LmsrMath.sol";
 import {IDynamicParimutuelMathErrors} from "./IDynamicParimutuelMathErrors.sol";
 
 /// @title DynamicParimutuelMath
@@ -11,6 +12,7 @@ import {IDynamicParimutuelMathErrors} from "./IDynamicParimutuelMathErrors.sol";
 library DynamicParimutuelMath {
     // ===== LIBRARIES =====
     using Math for uint256;
+    using LmsrMath for uint256;
 
     /// @notice Given a gross amount (inclusive of fees), splits it into the net amount and the fee amount.
     /// @param grossAmount The total amount, including the fee.
@@ -43,30 +45,26 @@ library DynamicParimutuelMath {
 
     /// @notice Validates that a buy is economically sound: the tokens paid cover the cost of the shares minted.
     /// @dev Derivation:
-    /* tokensIn >= c1 - c0
-     * tokensIn >= k * sqrt(newSumTerm) - k * sqrt(currentSumTerm)
-     * tokensIn >= k * ( sqrt(newSumTerm) - sqrt(currentSumTerm) )
-     * tokensIn >= k * ( sqrt( currentSumTerm - modelSupply^2 + (modelSupply + sharesOut)^2 ) - sqrt(currentSumTerm) )
-     * tokensIn >= k * ( sqrt( currentSumTerm - modelSupply^2 + modelSupply^2 + 2*modelSupply*sharesOut + sharesOut^2) - sqrt(currentSumTerm) )
-     * tokensIn >= k * ( sqrt( currentSumTerm + 2*modelSupply*sharesOut + sharesOut^2) - sqrt(currentSumTerm) )
-     * tokensIn >= k * ( sqrt( currentSumTerm + sharesOut * (2*modelSupply + sharesOut) - sqrt(currentSumTerm) )
-     */
-    /// @param k The liquidity depth parameter.
-    /// @param currentSumTerm36 The current sum of squared supplies (36 decimal precision).
-    /// @param modelCurrentSupply The current supply of the outcome being bought.
-    /// @param tokensIn The net tokens in (after fees).
-    /// @param sharesOut The number of shares to receive.
-    /// @param tokenDecimalScalar The token decimal scaler (10^(18-decimals)).
-    /// @return newSumTerm36 The updated sum term after the buy.
-    /// @return valid True if the buy is economically valid.
+    // tokensIn >= c1 - c0
+    // tokensIn >= b * ln(Z1) - b * ln(Z0)
+    // tokensIn >= b * (ln(Z1) - ln(Z0)
+    // tokensIn >= b * ln(Z1/Z0)
+    // / @param k The liquidity depth parameter.
+    // / @param currentSumTerm36 The current sum of squared supplies (36 decimal precision).
+    // / @param modelCurrentSupply The current supply of the outcome being bought.
+    // / @param tokensIn The net tokens in (after fees).
+    // / @param sharesOut The number of shares to receive.
+    // / @param tokenDecimalScalar The token decimal scaler (10^(18-decimals)).
+    // / @return newSumTerm36 The updated sum term after the buy.
+    // / @return valid True if the buy is economically valid.
     function buyIsValid(
-        uint256 k,
-        uint256 currentSumTerm36,
-        uint256 modelCurrentSupply,
+        uint256 b,
+        uint256 currentZ,
+        uint256 outcomeCurrentSupply,
         uint256 tokensIn,
         uint256 sharesOut,
         uint256 tokenDecimalScalar
-    ) internal pure returns (uint256 newSumTerm36, bool valid) {
+    ) internal pure returns (uint256 newZ, bool valid) {
         // Checks: Validate tokens in
         if (tokensIn == 0) {
             revert IDynamicParimutuelMathErrors.ZeroTokensIn();
@@ -77,58 +75,49 @@ library DynamicParimutuelMath {
             revert IDynamicParimutuelMathErrors.ZeroSharesOut();
         }
 
-        // Calculate new sum term
+        uint256 outcomeNewExp = ((outcomeCurrentSupply + sharesOut) * 1e18 / b)._computeExp();
+        uint256 outcomeCurrentExp = (outcomeCurrentSupply * 1e18 / b)._computeExp();
+
+        // Calculate new Z
         // Note: No rounding, to not propagate error to future trades
-        newSumTerm36 = currentSumTerm36 + sharesOut * ((2 * modelCurrentSupply) + sharesOut); // Note: No rounding, to not propagate error to future trades
+        newZ = currentZ + outcomeNewExp - outcomeCurrentExp;
 
-        // Checks: Validate new sum term
-        assert(newSumTerm36 > currentSumTerm36);
-
-        // Calculate sum term square roots
-        uint256 c1Sqrt = sqrtUp(newSumTerm36); // Note: Up (against user)
-        uint256 c0Sqrt = sqrtDown(currentSumTerm36); // Note: Down (against user)
-
-        // Checks: Validate sum term square roots
-        if (c1Sqrt == c0Sqrt) {
-            revert IDynamicParimutuelMathErrors.BuyTooSmall();
-        }
+        // Checks: Validate new Z
+        assert(newZ > currentZ);
 
         // Check if buy is valid
-        valid = tokensIn * tokenDecimalScalar * 1e18 >= k * (c1Sqrt - c0Sqrt);
+        valid = tokensIn * tokenDecimalScalar * 1e18
+            >= b * (newZ._getExpUpperBound() / currentZ._getExpLowerBound())._computeLnUpperBound();
     }
 
     /// @notice Validates that a sell is economically sound: the tokens received do not exceed the cost reduction.
     /// @dev Derivation:
-    /* tokensOut <= c0 - c1
-     * tokensOut <= k * sqrt(currentSumTerm) - k * sqrt(newSumTerm)
-     * tokensOut <= k * (sqrt(currentSumTerm) - sqrt(newSumTerm))
-     * tokensOut <= k * (sqrt(currentSumTerm) - sqrt(currentSumTerm - modelSupply^2 + (modelSupply - sharesIn)^2))
-     * tokensOut <= k * (sqrt(currentSumTerm) - sqrt(currentSumTerm - modelSupply^2 + modelSupply^2 -2*modelSupply*sharesIn + sharesIn^2)
-     * tokensOut <= k * (sqrt(currentSumTerm) - sqrt(currentSumTerm - 2*modelSupply*sharesIn + sharesIn^2)
-     * tokensOut <= k * (sqrt(currentSumTerm) - sqrt(currentSumTerm - sharesIn * (2*modelSupply - sharesIn)
-     */
-    /// @param k The liquidity depth parameter.
-    /// @param currentSumTerm36 The current sum of squared supplies (36 decimal precision).
-    /// @param modelCurrentSupply The current supply of the outcome being sold.
-    /// @param sharesIn The number of shares to sell.
-    /// @param tokensOut The gross tokens out.
-    /// @param tokenDecimalScalar The token decimal scaler (10^(18-decimals)).
-    /// @return newSumTerm36 The updated sum term after the sell.
-    /// @return valid True if the sell is economically valid.
+    // tokensOut <= c0 - c1
+    // tokensOut <= b * ln(Z0) - b * ln(Z1)
+    // tokensOut <= b * (ln(Z0) - ln(Z1)
+    // tokensOut <= b * ln(Z0/Z1)
+    // / @param k The liquidity depth parameter.
+    // / @param currentSumTerm36 The current sum of squared supplies (36 decimal precision).
+    // / @param modelCurrentSupply The current supply of the outcome being sold.
+    // / @param sharesIn The number of shares to sell.
+    // / @param tokensOut The gross tokens out.
+    // / @param tokenDecimalScalar The token decimal scaler (10^(18-decimals)).
+    // / @return newSumTerm36 The updated sum term after the sell.
+    // / @return valid True if the sell is economically valid.
     function sellIsValid(
-        uint256 k,
-        uint256 currentSumTerm36,
-        uint256 modelCurrentSupply,
+        uint256 b,
+        uint256 currentZ,
+        uint256 outcomeCurrentSupply,
         uint256 sharesIn,
         uint256 tokensOut,
         uint256 tokenDecimalScalar
-    ) internal pure returns (uint256 newSumTerm36, bool valid) {
+    ) internal pure returns (uint256 newZ, bool valid) {
         // Checks: Validate shares in
         if (sharesIn == 0) {
             revert IDynamicParimutuelMathErrors.ZeroSharesIn();
         }
-        if (sharesIn > modelCurrentSupply) {
-            revert IDynamicParimutuelMathErrors.SharesInExceedSupply(sharesIn, modelCurrentSupply);
+        if (sharesIn > outcomeCurrentSupply) {
+            revert IDynamicParimutuelMathErrors.SharesInExceedSupply(sharesIn, outcomeCurrentSupply);
         }
 
         // Checks: Validate tokens out
@@ -136,27 +125,19 @@ library DynamicParimutuelMath {
             revert IDynamicParimutuelMathErrors.ZeroTokensOut();
         }
 
+        uint256 outcomeNewExp = ((outcomeCurrentSupply - sharesIn) * 1e18 / b)._computeExp();
+        uint256 outcomeCurrentExp = (outcomeCurrentSupply * 1e18 / b)._computeExp();
+
         // Calculate new sum term
         // Note: No rounding, to not propagate error to future trades
-        newSumTerm36 = currentSumTerm36 - sharesIn * ((2 * modelCurrentSupply) - sharesIn);
+        newZ = currentZ + outcomeNewExp - outcomeCurrentExp;
 
-        // Checks: Validate new sum term
-        assert(newSumTerm36 < currentSumTerm36);
-
-        // Calculate sum term square roots
-        uint256 c0Sqrt = sqrtDown(currentSumTerm36); // Note: Down (against user)
-        uint256 c1Sqrt = sqrtUp(newSumTerm36); // Note: Up (against user)
-
-        // Checks: Validate sum term square roots
-        if (c1Sqrt > c0Sqrt) {
-            revert IDynamicParimutuelMathErrors.SqrtOverlap();
-        }
-        if (c1Sqrt == c0Sqrt) {
-            revert IDynamicParimutuelMathErrors.SellTooSmall();
-        }
+        // Checks: Validate new Z
+        assert(newZ < currentZ);
 
         // Check if sell is valid
-        valid = tokensOut * tokenDecimalScalar * 1e18 <= k * (c0Sqrt - c1Sqrt);
+        valid = tokensOut * tokenDecimalScalar * 1e18
+            <= b * (newZ._getExpLowerBound() / currentZ._getExpUpperBound())._computeLnLowerBound();
     }
 
     /// @notice Calculates the spot price of a specific outcome.
