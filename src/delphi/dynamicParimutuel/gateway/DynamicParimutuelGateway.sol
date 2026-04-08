@@ -157,13 +157,14 @@ contract DynamicParimutuelGateway is IDynamicParimutuelGateway, Initializable {
         ifDeployedByFactory(marketProxy)
         returns (uint256 marketCreatorReward, uint256 refund, uint256 marketCreatorTradingFeesCut)
     {
+        // Checks/Effects/Interactions: Submit winner
+        (marketCreatorReward, refund, marketCreatorTradingFeesCut) =
+            IDynamicParimutuelMarket(marketProxy).submitWinner(msg.sender, winningOutcomeIdx);
+
         // Effects: Emit event
         emit GatewayWinnerSubmitted(
             marketProxy, winningOutcomeIdx, marketCreatorReward, refund, marketCreatorTradingFeesCut
         );
-
-        // Checks/Effects/Interactions: Submit winner
-        return IDynamicParimutuelMarket(marketProxy).submitWinner(msg.sender, winningOutcomeIdx);
     }
 
     /// @inheritdoc IDynamicParimutuelGateway
@@ -222,7 +223,7 @@ contract DynamicParimutuelGateway is IDynamicParimutuelGateway, Initializable {
         returns (uint256 initialDeposit, uint256 refund)
     {
         initialDeposit = initialPool.calculateInitialDeposit(outcomeCount);
-        refund = initialPool - initialDeposit;
+        refund = initialDeposit - initialPool;
     }
 
     // Implementation Configuration
