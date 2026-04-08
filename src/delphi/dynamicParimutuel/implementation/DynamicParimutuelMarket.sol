@@ -41,8 +41,8 @@ contract DynamicParimutuelMarket is
     uint256 public constant override MAX_SETTLEMENT_WINDOW = 24 hours;
     uint256 public constant override MIN_TRADING_FEES_RECIPIENT_PCT = 0; // 0%
     uint256 public constant override MAX_TRADING_FEES_RECIPIENT_PCT = 1e18; // 100%
-    uint256 internal constant _MIN_INITIAL_LIQUIDITY_18 = 1e18;
-    uint256 internal constant _MAX_INITIAL_LIQUIDITY_18 = 1_000_000e18;
+    uint256 internal constant _MIN_INITIAL_DEPOSIT_18 = 1e18;
+    uint256 internal constant _MAX_INITIAL_DEPOSIT_18 = 1_000_000e18;
 
     // ===== IMMUTABLES =====
     address public immutable override GATEWAY;
@@ -50,8 +50,8 @@ contract DynamicParimutuelMarket is
     address public immutable override TRADING_FEES_RECIPIENT;
     uint256 public immutable override TRADING_FEES_RECIPIENT_PCT;
     uint256 public immutable override TOKEN_DECIMAL_SCALER;
-    uint256 public immutable override MIN_INITIAL_LIQUIDITY;
-    uint256 public immutable override MAX_INITIAL_LIQUIDITY;
+    uint256 public immutable override MIN_INITIAL_DEPOSIT;
+    uint256 public immutable override MAX_INITIAL_DEPOSIT;
 
     // ===== INITIALIZATION IMMUTABLES =====
 
@@ -127,9 +127,9 @@ contract DynamicParimutuelMarket is
         TOKEN = IDynamicParimutuelGateway(gateway).TOKEN();
         TOKEN_DECIMAL_SCALER = IDynamicParimutuelGateway(gateway).TOKEN_DECIMAL_SCALER();
 
-        // Effects: Set initial liquidity bounds
-        MIN_INITIAL_LIQUIDITY = _MIN_INITIAL_LIQUIDITY_18 / TOKEN_DECIMAL_SCALER;
-        MAX_INITIAL_LIQUIDITY = _MAX_INITIAL_LIQUIDITY_18 / TOKEN_DECIMAL_SCALER;
+        // Effects: Set initial deposit bounds
+        MIN_INITIAL_DEPOSIT = _MIN_INITIAL_DEPOSIT_18 / TOKEN_DECIMAL_SCALER;
+        MAX_INITIAL_DEPOSIT = _MAX_INITIAL_DEPOSIT_18 / TOKEN_DECIMAL_SCALER;
 
         // Effects: Disable initializations in this contract (can only be initialized through a proxy)
         _disableInitializers();
@@ -140,12 +140,12 @@ contract DynamicParimutuelMarket is
     /// @notice Initializes a new market proxy (with its own unique configuration).
     /// @dev Will be delegatecalled by proxy. Determines per-market state. Can only be called once.
     /// @param marketCreator_ The address of the market creator.
-    /// @param initialLiquidity_ The initial liquidity deposited by the creator.
+    /// @param initialDeposit_ The initial deposit deposited by the creator.
     /// @param newMarketMetadata_ The verifiable URI for market metadata.
     /// @param initializationCalldata_ ABI-encoded MarketConfig struct.
     function initialize(
         address marketCreator_,
-        uint256 initialLiquidity_,
+        uint256 initialDeposit_,
         VerifiableUri calldata newMarketMetadata_,
         bytes calldata initializationCalldata_
     ) external nonReentrant initializer {
@@ -163,31 +163,31 @@ contract DynamicParimutuelMarket is
         // Checks: Validate new market metadata
         _validateVerifiableUri(newMarketMetadata_);
 
-        // Checks: Validate initial liquidity
-        if (initialLiquidity_ < MIN_INITIAL_LIQUIDITY) {
-            revert InitialLiquidityTooLow(initialLiquidity_, MIN_INITIAL_LIQUIDITY);
+        // Checks: Validate initial deposit
+        if (initialDeposit_ < MIN_INITIAL_DEPOSIT) {
+            revert InitialDepositTooLow(initialDeposit_, MIN_INITIAL_DEPOSIT);
         }
-        if (initialLiquidity_ > MAX_INITIAL_LIQUIDITY) {
-            revert InitialLiquidityTooHigh(initialLiquidity_, MAX_INITIAL_LIQUIDITY);
+        if (initialDeposit_ > MAX_INITIAL_DEPOSIT) {
+            revert InitialDepositTooHigh(initialDeposit_, MAX_INITIAL_DEPOSIT);
         }
 
         // Calculate shares per outcome
         marketCreatorSharesPerOutcome = newMarketConfig_.k
             .sharesPerOutcomeAtMarketCreation({
                 outcomeCount: newMarketConfig_.outcomeCount,
-                initialLiquidity: initialLiquidity_,
+                initialDeposit: initialDeposit_,
                 tokenDecimalScalar: TOKEN_DECIMAL_SCALER
             });
         assert(marketCreatorSharesPerOutcome > 0);
 
         // Calculate initial pool
-        uint256 initialPool = initialLiquidity_.poolAtCreation(newMarketConfig_.outcomeCount);
+        uint256 initialPool = initialDeposit_.poolAtCreation(newMarketConfig_.outcomeCount);
         assert(initialPool > 0);
 
         // Checks: Ensure market is properly funded
         uint256 tokenBalance = TOKEN.balanceOf(address(this));
-        if (tokenBalance < initialLiquidity_) {
-            revert MarketNotProperlyFunded(tokenBalance, initialLiquidity_);
+        if (tokenBalance < initialDeposit_) {
+            revert MarketNotProperlyFunded(tokenBalance, initialDeposit_);
         }
 
         // Effects: Set initialization immutables
@@ -196,7 +196,10 @@ contract DynamicParimutuelMarket is
 
         // Effects: Save new market
         _market.config = newMarketConfig_;
+        _market.initialPool = initialPool;
         _market.pool = initialPool;
+        _market.refund = tokenBalance - initialPool;
+        _market.tradingFees = 0;
         _market.winningOutcomeIdx = type(uint256).max; // Note: Sentinel value for "no winner yet"
         _market.sumTerm36 = (marketCreatorSharesPerOutcome ** 2) * newMarketConfig_.outcomeCount;
         assert(_market.sumTerm36 > 0);
@@ -211,9 +214,6 @@ contract DynamicParimutuelMarket is
              */
             _mint(address(this), outcomeIdx, marketCreatorSharesPerOutcome);
         }
-
-        // Interactions: Send all token balance (except initial pool) to TRADING_FEES_RECIPIENT
-        TOKEN.safeTransfer(TRADING_FEES_RECIPIENT, tokenBalance - initialPool);
     }
 
     // ===== EXTERNAL FUNCTIONS =====
@@ -314,6 +314,7 @@ contract DynamicParimutuelMarket is
 
         // Cache trading fee
         uint256 tradingFees = _market.tradingFees;
+        uint256 refund = _market.refund;
 
         // Calculate market creator reward
         uint256 marketCreatorReward = _market.pool
@@ -325,6 +326,7 @@ contract DynamicParimutuelMarket is
         _market.winningOutcomeIdx = winningOutcomeIdx;
         _market.pool -= marketCreatorReward;
         _market.tradingFees = 0;
+        _market.refund = 0;
 
         // Effects: Emit event
         emit WinnerSubmitted(winningOutcomeIdx);
@@ -337,7 +339,8 @@ contract DynamicParimutuelMarket is
         TOKEN.safeTransfer(TRADING_FEES_RECIPIENT, tradingFeesRecipientCut);
 
         // Interactions: Give marketCreatorReward + remainingFees to MARKET_CREATOR
-        TOKEN.safeTransfer(marketCreator, marketCreatorReward + (tradingFees - tradingFeesRecipientCut));
+        uint256 marketCreatorTotal = marketCreatorReward + refund + tradingFees - tradingFeesRecipientCut;
+        TOKEN.safeTransfer(marketCreator, marketCreatorTotal);
     }
 
     /// @inheritdoc IDynamicParimutuelMarket
@@ -631,16 +634,18 @@ contract DynamicParimutuelMarket is
         // Get vars
         uint256 _marketCreationSharesValue = marketCreationSharesValue();
         uint256 tradingFees = _market.tradingFees;
+        uint256 refund = _market.refund;
 
         // Effects: Update market
         _market.pool -= _marketCreationSharesValue;
         _market.tradingFees = 0;
+        _market.refund = 0;
 
         // Effects: Mark market creation shares as liquidated
         marketCreationSharesLiquidated = true;
 
         // Interactions: Send  to TRADING_FEES_RECIPIENT
-        TOKEN.safeTransfer(TRADING_FEES_RECIPIENT, _marketCreationSharesValue + tradingFees);
+        TOKEN.safeTransfer(TRADING_FEES_RECIPIENT, _marketCreationSharesValue + tradingFees + refund);
 
         // Return
         return _marketCreationSharesValue + tradingFees;

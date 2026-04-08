@@ -4,8 +4,10 @@ pragma solidity 0.8.30;
 interface IDynamicParimutuelMarketTypes {
     struct Market {
         MarketConfig config; // Market Config (specified by the Market Creator)
+        uint256 initialPool;
         uint256 pool;
         uint256 tradingFees;
+        uint256 refund;
         uint256 sumTerm36; // supply(outcome1)^2 + supply(outcome2)^2 + ... + supply(outcomeN)^2
 
         // Initialized to max uint256, this sentinel value signals that no winning outcome is set yet.

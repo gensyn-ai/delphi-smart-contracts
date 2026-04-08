@@ -80,8 +80,8 @@ contract DelphiTestUtils is BaseTest {
             newMarketMetadata: IDelphiMarket.VerifiableUri({uri: "uri", uriContentHash: keccak256("uri")}),
             marketCreator: args.marketCreator,
             newMarketConfig: newMarketConfig,
-            initialLiquidity: bound(
-                args.initialLiquidity, implementation.MIN_INITIAL_LIQUIDITY(), implementation.MAX_INITIAL_LIQUIDITY()
+            initialDeposit: bound(
+                args.initialDeposit, implementation.MIN_INITIAL_DEPOSIT(), implementation.MAX_INITIAL_DEPOSIT()
             ),
             winningOutcomeIdx: bound(args.winningOutcomeIdx, 0, newMarketConfig.outcomeCount - 1)
         });

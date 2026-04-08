@@ -46,7 +46,7 @@ contract DelphiFork_Test is DelphiDeployer, DelphiTestUtils {
     struct Args {
         uint256 marketCreationFee;
         uint256 tradingFeesRecipient;
-        uint256 initialLiquidity;
+        uint256 initialDeposit;
         uint256 outcomeCount;
         uint256 k;
         uint256 tradingFee;
@@ -222,22 +222,21 @@ contract DelphiFork_Test is DelphiDeployer, DelphiTestUtils {
         internal
         returns (uint256 outcomeCount, address newMarketProxy, uint256 tradingDeadline, uint256 settlementDeadline)
     {
-        // Pick initial liquidity
-        uint256 initialLiquidity = bound(
-            args.initialLiquidity, implementation.MIN_INITIAL_LIQUIDITY(), implementation.MAX_INITIAL_LIQUIDITY()
-        );
+        // Pick initial deposit
+        uint256 initialDeposit =
+            bound(args.initialDeposit, implementation.MIN_INITIAL_DEPOSIT(), implementation.MAX_INITIAL_DEPOSIT());
 
         // Switch to ADMIN
         _useNewSender(ADMIN);
 
         // Deal tokens to USER
-        _deal({token: token, recipient: USER, desiredBalance: initialLiquidity + marketCreationFee});
+        _deal({token: token, recipient: USER, desiredBalance: initialDeposit + marketCreationFee});
 
         // Switch to USER
         _useNewSender(USER);
 
         // USER gives approves factory to spend their tokens for market creation
-        token.approve(address(factory), marketCreationFee + initialLiquidity);
+        token.approve(address(factory), marketCreationFee + initialDeposit);
 
         // Get outcome count
         outcomeCount = bound(args.outcomeCount, implementation.MIN_OUTCOME_COUNT(), implementation.MAX_OUTCOME_COUNT());
@@ -255,7 +254,7 @@ contract DelphiFork_Test is DelphiDeployer, DelphiTestUtils {
 
         // Deploy Market
         newMarketProxy = factory.deployNewMarketProxy({
-            initialLiquidity_: initialLiquidity,
+            initialDeposit_: initialDeposit,
             newMarketMetadata_: IDelphiMarket.VerifiableUri({
                 uri: "ipfs://dummyUri", uriContentHash: keccak256(abi.encodePacked("dummyUriContent"))
             }),

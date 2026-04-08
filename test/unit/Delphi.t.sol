@@ -144,7 +144,7 @@ contract DelphiUnit_Test is DelphiTestUtils, DelphiDeployer {
 
         vm.expectRevert();
         delphiFactory.deployNewMarketProxy({
-            initialLiquidity_: args.initialLiquidity,
+            initialDeposit_: args.initialDeposit,
             newMarketMetadata_: args.newMarketMetadata,
             newMarketInitializationCalldata_: randomCalldata
         });
@@ -163,11 +163,11 @@ contract DelphiUnit_Test is DelphiTestUtils, DelphiDeployer {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IERC20Errors.ERC20InsufficientAllowance.selector, delphiFactory, 0, args.initialLiquidity
+                IERC20Errors.ERC20InsufficientAllowance.selector, delphiFactory, 0, args.initialDeposit
             )
         );
         delphiFactory.deployNewMarketProxy({
-            initialLiquidity_: args.initialLiquidity,
+            initialDeposit_: args.initialDeposit,
             newMarketMetadata_: args.newMarketMetadata,
             newMarketInitializationCalldata_: abi.encode(args.newMarketConfig)
         });
@@ -186,8 +186,8 @@ contract DelphiUnit_Test is DelphiTestUtils, DelphiDeployer {
         args.newMarketConfig.outcomeCount =
             bound(args.newMarketConfig.outcomeCount, 0, implementation.MIN_OUTCOME_COUNT() - 1);
 
-        deal(address(token), CREATOR, args.initialLiquidity);
-        token.approve(address(delphiFactory), args.initialLiquidity);
+        deal(address(token), CREATOR, args.initialDeposit);
+        token.approve(address(delphiFactory), args.initialDeposit);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -197,7 +197,7 @@ contract DelphiUnit_Test is DelphiTestUtils, DelphiDeployer {
             )
         );
         delphiFactory.deployNewMarketProxy({
-            initialLiquidity_: args.initialLiquidity,
+            initialDeposit_: args.initialDeposit,
             newMarketMetadata_: args.newMarketMetadata,
             newMarketInitializationCalldata_: abi.encode(args.newMarketConfig)
         });
@@ -216,8 +216,8 @@ contract DelphiUnit_Test is DelphiTestUtils, DelphiDeployer {
         args.newMarketConfig.outcomeCount =
             bound(args.newMarketConfig.outcomeCount, implementation.MAX_OUTCOME_COUNT() + 1, type(uint256).max);
 
-        deal(address(token), CREATOR, args.initialLiquidity);
-        token.approve(address(delphiFactory), args.initialLiquidity);
+        deal(address(token), CREATOR, args.initialDeposit);
+        token.approve(address(delphiFactory), args.initialDeposit);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -227,7 +227,7 @@ contract DelphiUnit_Test is DelphiTestUtils, DelphiDeployer {
             )
         );
         delphiFactory.deployNewMarketProxy({
-            initialLiquidity_: args.initialLiquidity,
+            initialDeposit_: args.initialDeposit,
             newMarketMetadata_: args.newMarketMetadata,
             newMarketInitializationCalldata_: abi.encode(args.newMarketConfig)
         });
@@ -245,8 +245,8 @@ contract DelphiUnit_Test is DelphiTestUtils, DelphiDeployer {
         args = _boundDeployMarketArgs(implementation, args);
         args.newMarketConfig.k = bound(args.newMarketConfig.k, 0, implementation.MIN_K() - 1);
 
-        deal(address(token), CREATOR, args.initialLiquidity);
-        token.approve(address(delphiFactory), args.initialLiquidity);
+        deal(address(token), CREATOR, args.initialDeposit);
+        token.approve(address(delphiFactory), args.initialDeposit);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -254,7 +254,7 @@ contract DelphiUnit_Test is DelphiTestUtils, DelphiDeployer {
             )
         );
         delphiFactory.deployNewMarketProxy({
-            initialLiquidity_: args.initialLiquidity,
+            initialDeposit_: args.initialDeposit,
             newMarketMetadata_: args.newMarketMetadata,
             newMarketInitializationCalldata_: abi.encode(args.newMarketConfig)
         });
@@ -272,8 +272,8 @@ contract DelphiUnit_Test is DelphiTestUtils, DelphiDeployer {
         args = _boundDeployMarketArgs(implementation, args);
         args.newMarketConfig.k = bound(args.newMarketConfig.k, implementation.MAX_K() + 1, type(uint256).max);
 
-        deal(address(token), CREATOR, args.initialLiquidity);
-        token.approve(address(delphiFactory), args.initialLiquidity);
+        deal(address(token), CREATOR, args.initialDeposit);
+        token.approve(address(delphiFactory), args.initialDeposit);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -281,7 +281,7 @@ contract DelphiUnit_Test is DelphiTestUtils, DelphiDeployer {
             )
         );
         delphiFactory.deployNewMarketProxy({
-            initialLiquidity_: args.initialLiquidity,
+            initialDeposit_: args.initialDeposit,
             newMarketMetadata_: args.newMarketMetadata,
             newMarketInitializationCalldata_: abi.encode(args.newMarketConfig)
         });
@@ -300,8 +300,8 @@ contract DelphiUnit_Test is DelphiTestUtils, DelphiDeployer {
         args.newMarketConfig.tradingFee =
             bound(args.newMarketConfig.tradingFee, 0, implementation.MIN_TRADING_FEE() - 1);
 
-        deal(address(token), CREATOR, args.initialLiquidity);
-        token.approve(address(delphiFactory), args.initialLiquidity);
+        deal(address(token), CREATOR, args.initialDeposit);
+        token.approve(address(delphiFactory), args.initialDeposit);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -311,7 +311,7 @@ contract DelphiUnit_Test is DelphiTestUtils, DelphiDeployer {
             )
         );
         delphiFactory.deployNewMarketProxy({
-            initialLiquidity_: args.initialLiquidity,
+            initialDeposit_: args.initialDeposit,
             newMarketMetadata_: args.newMarketMetadata,
             newMarketInitializationCalldata_: abi.encode(args.newMarketConfig)
         });
@@ -330,8 +330,8 @@ contract DelphiUnit_Test is DelphiTestUtils, DelphiDeployer {
         args.newMarketConfig.tradingFee =
             bound(args.newMarketConfig.tradingFee, implementation.MAX_TRADING_FEE() + 1, type(uint256).max);
 
-        deal(address(token), CREATOR, args.initialLiquidity);
-        token.approve(address(delphiFactory), args.initialLiquidity);
+        deal(address(token), CREATOR, args.initialDeposit);
+        token.approve(address(delphiFactory), args.initialDeposit);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -341,7 +341,7 @@ contract DelphiUnit_Test is DelphiTestUtils, DelphiDeployer {
             )
         );
         delphiFactory.deployNewMarketProxy({
-            initialLiquidity_: args.initialLiquidity,
+            initialDeposit_: args.initialDeposit,
             newMarketMetadata_: args.newMarketMetadata,
             newMarketInitializationCalldata_: abi.encode(args.newMarketConfig)
         });
@@ -359,8 +359,8 @@ contract DelphiUnit_Test is DelphiTestUtils, DelphiDeployer {
         args = _boundDeployMarketArgs(implementation, args);
         args.newMarketConfig.tradingDeadline = bound(args.newMarketConfig.tradingDeadline, 0, block.timestamp);
 
-        deal(address(token), CREATOR, args.initialLiquidity);
-        token.approve(address(delphiFactory), args.initialLiquidity);
+        deal(address(token), CREATOR, args.initialDeposit);
+        token.approve(address(delphiFactory), args.initialDeposit);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -370,7 +370,7 @@ contract DelphiUnit_Test is DelphiTestUtils, DelphiDeployer {
             )
         );
         delphiFactory.deployNewMarketProxy({
-            initialLiquidity_: args.initialLiquidity,
+            initialDeposit_: args.initialDeposit,
             newMarketMetadata_: args.newMarketMetadata,
             newMarketInitializationCalldata_: abi.encode(args.newMarketConfig)
         });
@@ -392,8 +392,8 @@ contract DelphiUnit_Test is DelphiTestUtils, DelphiDeployer {
             block.timestamp + implementation.MIN_TRADING_WINDOW() - 1
         );
 
-        deal(address(token), CREATOR, args.initialLiquidity);
-        token.approve(address(delphiFactory), args.initialLiquidity);
+        deal(address(token), CREATOR, args.initialDeposit);
+        token.approve(address(delphiFactory), args.initialDeposit);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -403,7 +403,7 @@ contract DelphiUnit_Test is DelphiTestUtils, DelphiDeployer {
             )
         );
         delphiFactory.deployNewMarketProxy({
-            initialLiquidity_: args.initialLiquidity,
+            initialDeposit_: args.initialDeposit,
             newMarketMetadata_: args.newMarketMetadata,
             newMarketInitializationCalldata_: abi.encode(args.newMarketConfig)
         });
@@ -425,8 +425,8 @@ contract DelphiUnit_Test is DelphiTestUtils, DelphiDeployer {
             type(uint256).max
         );
 
-        deal(address(token), CREATOR, args.initialLiquidity);
-        token.approve(address(delphiFactory), args.initialLiquidity);
+        deal(address(token), CREATOR, args.initialDeposit);
+        token.approve(address(delphiFactory), args.initialDeposit);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -436,7 +436,7 @@ contract DelphiUnit_Test is DelphiTestUtils, DelphiDeployer {
             )
         );
         delphiFactory.deployNewMarketProxy({
-            initialLiquidity_: args.initialLiquidity,
+            initialDeposit_: args.initialDeposit,
             newMarketMetadata_: args.newMarketMetadata,
             newMarketInitializationCalldata_: abi.encode(args.newMarketConfig)
         });
@@ -455,8 +455,8 @@ contract DelphiUnit_Test is DelphiTestUtils, DelphiDeployer {
         args.newMarketConfig.settlementDeadline =
             bound(args.newMarketConfig.settlementDeadline, 0, args.newMarketConfig.tradingDeadline);
 
-        deal(address(token), CREATOR, args.initialLiquidity);
-        token.approve(address(delphiFactory), args.initialLiquidity);
+        deal(address(token), CREATOR, args.initialDeposit);
+        token.approve(address(delphiFactory), args.initialDeposit);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -466,7 +466,7 @@ contract DelphiUnit_Test is DelphiTestUtils, DelphiDeployer {
             )
         );
         delphiFactory.deployNewMarketProxy({
-            initialLiquidity_: args.initialLiquidity,
+            initialDeposit_: args.initialDeposit,
             newMarketMetadata_: args.newMarketMetadata,
             newMarketInitializationCalldata_: abi.encode(args.newMarketConfig)
         });
@@ -488,8 +488,8 @@ contract DelphiUnit_Test is DelphiTestUtils, DelphiDeployer {
             args.newMarketConfig.tradingDeadline + implementation.MIN_SETTLEMENT_WINDOW() - 1
         );
 
-        deal(address(token), CREATOR, args.initialLiquidity);
-        token.approve(address(delphiFactory), args.initialLiquidity);
+        deal(address(token), CREATOR, args.initialDeposit);
+        token.approve(address(delphiFactory), args.initialDeposit);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -499,7 +499,7 @@ contract DelphiUnit_Test is DelphiTestUtils, DelphiDeployer {
             )
         );
         delphiFactory.deployNewMarketProxy({
-            initialLiquidity_: args.initialLiquidity,
+            initialDeposit_: args.initialDeposit,
             newMarketMetadata_: args.newMarketMetadata,
             newMarketInitializationCalldata_: abi.encode(args.newMarketConfig)
         });
@@ -521,8 +521,8 @@ contract DelphiUnit_Test is DelphiTestUtils, DelphiDeployer {
             type(uint256).max
         );
 
-        deal(address(token), CREATOR, args.initialLiquidity);
-        token.approve(address(delphiFactory), args.initialLiquidity);
+        deal(address(token), CREATOR, args.initialDeposit);
+        token.approve(address(delphiFactory), args.initialDeposit);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -532,7 +532,7 @@ contract DelphiUnit_Test is DelphiTestUtils, DelphiDeployer {
             )
         );
         delphiFactory.deployNewMarketProxy({
-            initialLiquidity_: args.initialLiquidity,
+            initialDeposit_: args.initialDeposit,
             newMarketMetadata_: args.newMarketMetadata,
             newMarketInitializationCalldata_: abi.encode(args.newMarketConfig)
         });
@@ -550,12 +550,12 @@ contract DelphiUnit_Test is DelphiTestUtils, DelphiDeployer {
         args = _boundDeployMarketArgs(implementation, args);
         args.newMarketMetadata.uri = "";
 
-        deal(address(token), CREATOR, args.initialLiquidity);
-        token.approve(address(delphiFactory), args.initialLiquidity);
+        deal(address(token), CREATOR, args.initialDeposit);
+        token.approve(address(delphiFactory), args.initialDeposit);
 
         vm.expectRevert(IDynamicParimutuelMarketErrors.EmptyUri.selector);
         delphiFactory.deployNewMarketProxy({
-            initialLiquidity_: args.initialLiquidity,
+            initialDeposit_: args.initialDeposit,
             newMarketMetadata_: args.newMarketMetadata,
             newMarketInitializationCalldata_: abi.encode(args.newMarketConfig)
         });
@@ -573,18 +573,18 @@ contract DelphiUnit_Test is DelphiTestUtils, DelphiDeployer {
         args = _boundDeployMarketArgs(implementation, args);
         args.newMarketMetadata.uriContentHash = bytes32(0);
 
-        deal(address(token), CREATOR, args.initialLiquidity);
-        token.approve(address(delphiFactory), args.initialLiquidity);
+        deal(address(token), CREATOR, args.initialDeposit);
+        token.approve(address(delphiFactory), args.initialDeposit);
 
         vm.expectRevert(IDynamicParimutuelMarketErrors.EmptyUriContentHash.selector);
         delphiFactory.deployNewMarketProxy({
-            initialLiquidity_: args.initialLiquidity,
+            initialDeposit_: args.initialDeposit,
             newMarketMetadata_: args.newMarketMetadata,
             newMarketInitializationCalldata_: abi.encode(args.newMarketConfig)
         });
     }
 
-    function test_CreateMarket_Reverts_InitialLiquidityTooLow(
+    function test_CreateMarket_Reverts_InitialDepositTooLow(
         uint8 decimals,
         uint256 marketCreationFee,
         IEndToEndHandler.DeployMarketArgs memory args
@@ -594,26 +594,26 @@ contract DelphiUnit_Test is DelphiTestUtils, DelphiDeployer {
 
         args.marketCreator = CREATOR;
         args = _boundDeployMarketArgs(implementation, args);
-        args.initialLiquidity = bound(args.initialLiquidity, 0, implementation.MIN_INITIAL_LIQUIDITY() - 1);
+        args.initialDeposit = bound(args.initialDeposit, 0, implementation.MIN_INITIAL_DEPOSIT() - 1);
 
-        deal(address(token), CREATOR, args.initialLiquidity);
-        token.approve(address(delphiFactory), args.initialLiquidity);
+        deal(address(token), CREATOR, args.initialDeposit);
+        token.approve(address(delphiFactory), args.initialDeposit);
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IDynamicParimutuelMarketErrors.InitialLiquidityTooLow.selector,
-                args.initialLiquidity,
-                implementation.MIN_INITIAL_LIQUIDITY()
+                IDynamicParimutuelMarketErrors.InitialDepositTooLow.selector,
+                args.initialDeposit,
+                implementation.MIN_INITIAL_DEPOSIT()
             )
         );
         delphiFactory.deployNewMarketProxy({
-            initialLiquidity_: args.initialLiquidity,
+            initialDeposit_: args.initialDeposit,
             newMarketMetadata_: args.newMarketMetadata,
             newMarketInitializationCalldata_: abi.encode(args.newMarketConfig)
         });
     }
 
-    function test_CreateMarket_Reverts_InitialLiquidityTooHigh(
+    function test_CreateMarket_Reverts_InitialDepositTooHigh(
         uint8 decimals,
         uint256 marketCreationFee,
         IEndToEndHandler.DeployMarketArgs memory args
@@ -623,21 +623,20 @@ contract DelphiUnit_Test is DelphiTestUtils, DelphiDeployer {
 
         args.marketCreator = CREATOR;
         args = _boundDeployMarketArgs(implementation, args);
-        args.initialLiquidity =
-            bound(args.initialLiquidity, implementation.MAX_INITIAL_LIQUIDITY() + 1, type(uint256).max);
+        args.initialDeposit = bound(args.initialDeposit, implementation.MAX_INITIAL_DEPOSIT() + 1, type(uint256).max);
 
-        deal(address(token), CREATOR, args.initialLiquidity);
-        token.approve(address(delphiFactory), args.initialLiquidity);
+        deal(address(token), CREATOR, args.initialDeposit);
+        token.approve(address(delphiFactory), args.initialDeposit);
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IDynamicParimutuelMarketErrors.InitialLiquidityTooHigh.selector,
-                args.initialLiquidity,
-                implementation.MAX_INITIAL_LIQUIDITY()
+                IDynamicParimutuelMarketErrors.InitialDepositTooHigh.selector,
+                args.initialDeposit,
+                implementation.MAX_INITIAL_DEPOSIT()
             )
         );
         delphiFactory.deployNewMarketProxy({
-            initialLiquidity_: args.initialLiquidity,
+            initialDeposit_: args.initialDeposit,
             newMarketMetadata_: args.newMarketMetadata,
             newMarketInitializationCalldata_: abi.encode(args.newMarketConfig)
         });
@@ -654,11 +653,11 @@ contract DelphiUnit_Test is DelphiTestUtils, DelphiDeployer {
         args.marketCreator = CREATOR;
         args = _boundDeployMarketArgs(implementation, args);
 
-        deal(address(token), CREATOR, args.initialLiquidity);
-        token.approve(address(delphiFactory), args.initialLiquidity);
+        deal(address(token), CREATOR, args.initialDeposit);
+        token.approve(address(delphiFactory), args.initialDeposit);
 
         delphiFactory.deployNewMarketProxy({
-            initialLiquidity_: args.initialLiquidity,
+            initialDeposit_: args.initialDeposit,
             newMarketMetadata_: args.newMarketMetadata,
             newMarketInitializationCalldata_: abi.encode(args.newMarketConfig)
         });
@@ -679,8 +678,8 @@ contract DelphiUnit_Test is DelphiTestUtils, DelphiDeployer {
         args.marketCreator = CREATOR;
         args = _boundDeployMarketArgs(implementation, args);
 
-        deal(address(token), CREATOR, args.initialLiquidity);
-        token.approve(address(delphiFactory), args.initialLiquidity);
+        deal(address(token), CREATOR, args.initialDeposit);
+        token.approve(address(delphiFactory), args.initialDeposit);
 
         uint256 tokenDecimalScaler = 10 ** (18 - decimals);
         uint256 expectedMinTokensDelta = 0.01e18 / tokenDecimalScaler;
@@ -697,7 +696,7 @@ contract DelphiUnit_Test is DelphiTestUtils, DelphiDeployer {
         _setUp(6, 0);
         _useNewSender(CREATOR);
 
-        uint256 initialLiquidity = implementation.MIN_INITIAL_LIQUIDITY();
+        uint256 initialDeposit = implementation.MIN_INITIAL_DEPOSIT();
         uint256 minTradingWindow = implementation.MIN_TRADING_WINDOW();
 
         IDynamicParimutuelMarketTypes.MarketConfig memory config = IDynamicParimutuelMarketTypes.MarketConfig({
@@ -708,12 +707,12 @@ contract DelphiUnit_Test is DelphiTestUtils, DelphiDeployer {
             settlementDeadline: block.timestamp + minTradingWindow + implementation.MIN_SETTLEMENT_WINDOW()
         });
 
-        deal(address(token), CREATOR, initialLiquidity);
-        token.approve(address(delphiFactory), initialLiquidity);
+        deal(address(token), CREATOR, initialDeposit);
+        token.approve(address(delphiFactory), initialDeposit);
 
         marketProxy = IDynamicParimutuelMarket(
             delphiFactory.deployNewMarketProxy({
-                initialLiquidity_: initialLiquidity,
+                initialDeposit_: initialDeposit,
                 newMarketMetadata_: IDelphiMarket.VerifiableUri({uri: "uri", uriContentHash: keccak256("uri")}),
                 newMarketInitializationCalldata_: abi.encode(config)
             })
@@ -766,7 +765,7 @@ contract DelphiUnit_Test is DelphiTestUtils, DelphiDeployer {
 
         uint256 minSharesDelta = gateway.MIN_SHARES_DELTA();
 
-        // With MIN_K and MIN_INITIAL_LIQUIDITY, buying MIN_SHARES_DELTA shares
+        // With MIN_K and MIN_INITIAL_DEPOSIT, buying MIN_SHARES_DELTA shares
         // produces tokensIn well below minTokensDelta (1e4 for 6 decimals)
         vm.expectPartialRevert(IDynamicParimutuelGatewayErrors.TokensInBelowMin.selector);
         gateway.quoteBuyExactOut(marketProxy, 0, minSharesDelta);
@@ -777,7 +776,7 @@ contract DelphiUnit_Test is DelphiTestUtils, DelphiDeployer {
 
         uint256 minSharesDelta = gateway.MIN_SHARES_DELTA();
 
-        // With MIN_K and MIN_INITIAL_LIQUIDITY, selling a small amount of shares
+        // With MIN_K and MIN_INITIAL_DEPOSIT, selling a small amount of shares
         // produces tokensOut below minTokensDelta (1e4 for 6 decimals).
         // We use minSharesDelta * 1e8 so grossTokensOut > 0 but still below minTokensDelta.
         uint256 sharesToSell = minSharesDelta * 1e8;

@@ -195,15 +195,15 @@ interface IDynamicParimutuelGateway is IDynamicParimutuelGatewayErrors {
     /// @return The maximum settlement window in seconds.
     function maxSettlementWindow(IDynamicParimutuelMarket marketProxy) external view returns (uint256);
 
-    /// @notice Returns the minimum initial liquidity required to create a market.
+    /// @notice Returns the minimum initial deposit required to create a market.
     /// @param marketProxy The market proxy contract.
-    /// @return The minimum initial liquidity.
-    function minInitialLiquidity(IDynamicParimutuelMarket marketProxy) external view returns (uint256);
+    /// @return The minimum initial deposit.
+    function minInitialDeposit(IDynamicParimutuelMarket marketProxy) external view returns (uint256);
 
-    /// @notice Returns the maximum initial liquidity allowed when creating a market.
+    /// @notice Returns the maximum initial deposit allowed when creating a market.
     /// @param marketProxy The market proxy contract.
-    /// @return The maximum initial liquidity.
-    function maxInitialLiquidity(IDynamicParimutuelMarket marketProxy) external view returns (uint256);
+    /// @return The maximum initial deposit.
+    function maxInitialDeposit(IDynamicParimutuelMarket marketProxy) external view returns (uint256);
 
     // Quoting
 

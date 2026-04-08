@@ -50,7 +50,7 @@ interface IEndToEndHandler {
         IDelphiMarket.VerifiableUri newMarketMetadata;
         address marketCreator;
         IDynamicParimutuelMarket.MarketConfig newMarketConfig;
-        uint256 initialLiquidity;
+        uint256 initialDeposit;
         uint256 winningOutcomeIdx;
     }
 

@@ -241,7 +241,7 @@ contract EndToEndHandler is IEndToEndHandler, DelphiDeployer, DelphiTestUtils {
         uint256 marketCreatorBalance = token.balanceOf(args.marketCreator);
 
         // Calculate market creation cost
-        uint256 marketCreationCost = delphiFactory.MARKET_CREATION_FEE() + args.initialLiquidity;
+        uint256 marketCreationCost = delphiFactory.MARKET_CREATION_FEE() + args.initialDeposit;
 
         // If market creator can't afford the market creation cost
         if (marketCreatorBalance < marketCreationCost) {
@@ -258,14 +258,15 @@ contract EndToEndHandler is IEndToEndHandler, DelphiDeployer, DelphiTestUtils {
         // Deploy new market proxy
         marketProxy = IDynamicParimutuelMarket(
             delphiFactory.deployNewMarketProxy({
-                initialLiquidity_: args.initialLiquidity,
+                initialDeposit_: args.initialDeposit,
                 newMarketMetadata_: args.newMarketMetadata,
                 newMarketInitializationCalldata_: abi.encode(args.newMarketConfig)
             })
         );
 
         // Set market proxy config
-        _marketProxyConfig = marketProxy.getMarket().config;
+        IDynamicParimutuelMarketTypes.Market memory market = marketProxy.getMarket();
+        _marketProxyConfig = market.config;
 
         // Ensure market is OPEN after deployment
         assertEq(
@@ -291,6 +292,13 @@ contract EndToEndHandler is IEndToEndHandler, DelphiDeployer, DelphiTestUtils {
                 "outcomes in newly created market are not equally priced"
             );
         }
+
+        // Assert initial pool
+        assertEq(
+            market.pool,
+            market.initialPool,
+            "_createMarket: initial pool not equal to current pool"
+        );
     }
 
     function _buyExactOut(BuyExactOutArgs calldata args) internal {

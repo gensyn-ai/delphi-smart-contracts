@@ -89,10 +89,10 @@ interface IDynamicParimutuelMarket is
     function TRADING_FEES_RECIPIENT_PCT() external view returns (uint256);
     /// @notice The decimal scaler for the token (10^(18-decimals)).
     function TOKEN_DECIMAL_SCALER() external view returns (uint256);
-    /// @notice The minimum initial liquidity required to create a market (in token decimals).
-    function MIN_INITIAL_LIQUIDITY() external view returns (uint256);
-    /// @notice The maximum initial liquidity allowed when creating a market (in token decimals).
-    function MAX_INITIAL_LIQUIDITY() external view returns (uint256);
+    /// @notice The minimum initial deposit required to create a market (in token decimals).
+    function MIN_INITIAL_DEPOSIT() external view returns (uint256);
+    /// @notice The maximum initial deposit allowed when creating a market (in token decimals).
+    function MAX_INITIAL_DEPOSIT() external view returns (uint256);
 
     // ===== INITIALIZATION IMMUTABLES =====
 

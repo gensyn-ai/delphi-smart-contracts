@@ -242,7 +242,7 @@ abstract contract DynamicParimutuel_Invariants is Invariants_Base, DelphiTestUti
         IDynamicParimutuelMarket.Market memory marketInfo = market.getMarket();
 
         uint256 balance = token.balanceOf(address(market));
-        assertEq(balance, marketInfo.pool + marketInfo.tradingFees, "token balance not correct");
+        assertEq(balance, marketInfo.pool + marketInfo.tradingFees + marketInfo.refund, "token balance not correct");
     }
 
     function invariant_CanAlwaysSellEverything() external ifDeployed {

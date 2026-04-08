@@ -23,7 +23,7 @@ contract CreateMarket_Script is BaseScript {
 
     struct CreateMarketConfig {
         DelphiFactory delphiFactory;
-        uint256 initialLiquidity;
+        uint256 initialDeposit;
         IDelphiMarket.VerifiableUri newMarketMetadata;
         IDynamicParimutuelMarket.MarketConfig newMarketConfig;
     }
@@ -34,7 +34,7 @@ contract CreateMarket_Script is BaseScript {
         CreateMarketConfig memory config = _getCreateMarketConfigFromJson(json);
         return config.delphiFactory
             .deployNewMarketProxy({
-                initialLiquidity_: config.initialLiquidity,
+                initialDeposit_: config.initialDeposit,
                 newMarketMetadata_: config.newMarketMetadata,
                 newMarketInitializationCalldata_: abi.encode(config.newMarketConfig)
             });
@@ -45,7 +45,7 @@ contract CreateMarket_Script is BaseScript {
     function _getCreateMarketConfigFromJson(string memory json) internal pure returns (CreateMarketConfig memory) {
         return CreateMarketConfig({
             delphiFactory: DelphiFactory(json.readAddress(".delphiFactory")),
-            initialLiquidity: json.readUint(".initialLiquidity"),
+            initialDeposit: json.readUint(".initialDeposit"),
             newMarketMetadata: _getVerifiableUriFromJson(json, ".newMarketMetadata"),
             newMarketConfig: IDynamicParimutuelMarketTypes.MarketConfig({
                 outcomeCount: json.readUint(".newMarketConfig.outcomeCount"),

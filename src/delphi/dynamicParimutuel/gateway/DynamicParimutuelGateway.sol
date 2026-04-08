@@ -303,23 +303,23 @@ contract DynamicParimutuelGateway is IDynamicParimutuelGateway, Initializable {
     }
 
     /// @inheritdoc IDynamicParimutuelGateway
-    function minInitialLiquidity(IDynamicParimutuelMarket marketProxy)
+    function minInitialDeposit(IDynamicParimutuelMarket marketProxy)
         external
         view
         ifDeployedByFactory(marketProxy)
         returns (uint256)
     {
-        return marketProxy.MIN_INITIAL_LIQUIDITY();
+        return marketProxy.MIN_INITIAL_DEPOSIT();
     }
 
     /// @inheritdoc IDynamicParimutuelGateway
-    function maxInitialLiquidity(IDynamicParimutuelMarket marketProxy)
+    function maxInitialDeposit(IDynamicParimutuelMarket marketProxy)
         external
         view
         ifDeployedByFactory(marketProxy)
         returns (uint256)
     {
-        return marketProxy.MAX_INITIAL_LIQUIDITY();
+        return marketProxy.MAX_INITIAL_DEPOSIT();
     }
 
     // Quoting

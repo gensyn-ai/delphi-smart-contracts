@@ -13,7 +13,7 @@ interface IDelphiMarket {
 
     function initialize(
         address marketCreator_,
-        uint256 initialLiquidity_,
+        uint256 initialDeposit_,
         VerifiableUri calldata newMarketMetadata_,
         bytes calldata initializationCalldata_
     ) external;
