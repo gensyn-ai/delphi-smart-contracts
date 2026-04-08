@@ -309,6 +309,7 @@ contract DynamicParimutuelMarket is
         nonReentrant
         onlyGateway
         ifStatus(MarketStatus.AWAITING_SETTLEMENT)
+        returns (uint256 marketCreatorReward, uint256 refund, uint256 marketCreatorTradingFeesCut)
     {
         // Checks: Validate
         // Note: the winningOutcomeIdx is validated in the `totalSupply` view
@@ -318,33 +319,33 @@ contract DynamicParimutuelMarket is
 
         // Cache trading fee
         uint256 tradingFees = _market.tradingFees;
-        uint256 refund = _market.refund;
+        uint256 _refund = _market.refund;
 
         // Calculate market creator reward
-        uint256 marketCreatorReward = _market.pool
-            .redeemerReward({
-                redeemerWinningShares: marketCreatorSharesPerOutcome, unclaimedShares: totalSupply(winningOutcomeIdx)
-            });
+        uint256 _marketCreatorReward = marketCreatorWinningSharesSettlementValue(winningOutcomeIdx);
 
         // Effects: Update market
         _market.winningOutcomeIdx = winningOutcomeIdx;
-        _market.pool -= marketCreatorReward;
+        _market.pool -= _marketCreatorReward;
         _market.tradingFees = 0;
         _market.refund = 0;
-
-        // Effects: Emit event
-        emit WinnerSubmitted(winningOutcomeIdx);
 
         // Calculate trading fees recipient cut
         uint256 tradingFeesRecipientCut =
             tradingFees.tradingFeesRecipientCut({tradingFeesRecipientPct: TRADING_FEES_RECIPIENT_PCT});
+        uint256 _marketCreatorTradingFeesCut = tradingFees - tradingFeesRecipientCut;
+
+        // Effects: Emit event
+        emit WinnerSubmitted(winningOutcomeIdx, _marketCreatorReward, _refund, _marketCreatorTradingFeesCut);
 
         // Interactions: Give tradingFeesRecipientCut to TRADING_FEES_RECIPIENT
         TOKEN.safeTransfer(TRADING_FEES_RECIPIENT, tradingFeesRecipientCut);
 
-        // Interactions: Give marketCreatorReward + remainingFees to MARKET_CREATOR
-        uint256 marketCreatorTotal = marketCreatorReward + refund + tradingFees - tradingFeesRecipientCut;
+        // Interactions: Give market creator tokens
+        uint256 marketCreatorTotal = _marketCreatorReward + _refund + _marketCreatorTradingFeesCut;
         TOKEN.safeTransfer(marketCreator, marketCreatorTotal);
+
+        return (_marketCreatorReward, _refund, _marketCreatorTradingFeesCut);
     }
 
     /// @inheritdoc IDynamicParimutuelMarket
@@ -597,7 +598,19 @@ contract DynamicParimutuelMarket is
     }
 
     /// @inheritdoc IDynamicParimutuelMarket
-    function marketCreationSharesValue() public view returns (uint256 tokensOut) {
+    function marketCreatorWinningSharesSettlementValue(uint256 winningOutcomeIdx)
+        public
+        view
+        returns (uint256 tokensOut)
+    {
+        return _market.pool
+            .redeemerReward({
+                redeemerWinningShares: marketCreatorSharesPerOutcome, unclaimedShares: totalSupply(winningOutcomeIdx)
+            });
+    }
+
+    /// @inheritdoc IDynamicParimutuelMarket
+    function marketCreatorTotalSharesLiquidationValue() public view returns (uint256 tokensOut) {
         return _market.config.k
             .liquidatorTotalReward({
                 numeratorSum: outcomeSuppliesSum.mulDivDown(marketCreatorSharesPerOutcome, 1e18), // Note: round down (against user)
@@ -635,24 +648,25 @@ contract DynamicParimutuelMarket is
         // Checks: Ensure market creation shares haven't already been liquidated
         assert(!marketCreationSharesLiquidated);
 
+        // Effects: Mark market creation shares as liquidated
+        marketCreationSharesLiquidated = true;
+
         // Get vars
-        uint256 _marketCreationSharesValue = marketCreationSharesValue();
+        uint256 liquidateionValue = marketCreatorTotalSharesLiquidationValue();
         uint256 tradingFees = _market.tradingFees;
         uint256 refund = _market.refund;
 
         // Effects: Update market
-        _market.pool -= _marketCreationSharesValue;
+        _market.pool -= liquidateionValue;
         _market.tradingFees = 0;
         _market.refund = 0;
 
-        // Effects: Mark market creation shares as liquidated
-        marketCreationSharesLiquidated = true;
-
         // Interactions: Send  to TRADING_FEES_RECIPIENT
-        TOKEN.safeTransfer(TRADING_FEES_RECIPIENT, _marketCreationSharesValue + tradingFees + refund);
+        uint256 totalValue = liquidateionValue + tradingFees + refund;
+        TOKEN.safeTransfer(TRADING_FEES_RECIPIENT, totalValue);
 
         // Return
-        return _marketCreationSharesValue + tradingFees;
+        return totalValue;
     }
 
     // ===== INTERNAL VIEW FUNCTIONS ====

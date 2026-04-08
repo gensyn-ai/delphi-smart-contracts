@@ -155,12 +155,13 @@ contract DynamicParimutuelGateway is IDynamicParimutuelGateway, Initializable {
     function submitWinner(IDynamicParimutuelMarket marketProxy, uint256 winningOutcomeIdx)
         external
         ifDeployedByFactory(marketProxy)
+        returns (uint256 marketCreatorReward, uint256 refund, uint256 marketCreatorTradingFeesCut)
     {
         // Effects: Emit event
         emit GatewayWinnerSubmitted(marketProxy, winningOutcomeIdx);
 
         // Checks/Effects/Interactions: Submit winner
-        IDynamicParimutuelMarket(marketProxy).submitWinner(msg.sender, winningOutcomeIdx);
+        return IDynamicParimutuelMarket(marketProxy).submitWinner(msg.sender, winningOutcomeIdx);
     }
 
     /// @inheritdoc IDynamicParimutuelGateway
@@ -199,6 +200,18 @@ contract DynamicParimutuelGateway is IDynamicParimutuelGateway, Initializable {
     }
 
     // ========== VIEWS ==========
+
+    // Market Creation
+
+    /// @inheritdoc IDynamicParimutuelGateway
+    function initialDepositBreakdown(uint256 initialDeposit, uint256 outcomeCount)
+        external
+        pure
+        returns (uint256 initialPool, uint256 refund)
+    {
+        initialPool = initialDeposit.initialPool(outcomeCount);
+        refund = initialDeposit - initialPool;
+    }
 
     // Implementation Configuration
 
@@ -623,13 +636,23 @@ contract DynamicParimutuelGateway is IDynamicParimutuelGateway, Initializable {
     }
 
     /// @inheritdoc IDynamicParimutuelGateway
-    function marketCreationSharesValue(IDynamicParimutuelMarket marketProxy)
+    function marketCreatorWinningSharesSettlementValue(IDynamicParimutuelMarket marketProxy, uint256 outcomeIdx)
         external
         view
         ifDeployedByFactory(marketProxy)
         returns (uint256 tokensOut)
     {
-        return marketProxy.marketCreationSharesValue();
+        return marketProxy.marketCreatorWinningSharesSettlementValue(outcomeIdx);
+    }
+
+    /// @inheritdoc IDynamicParimutuelGateway
+    function marketCreatorTotalSharesLiquidationValue(IDynamicParimutuelMarket marketProxy)
+        external
+        view
+        ifDeployedByFactory(marketProxy)
+        returns (uint256 tokensOut)
+    {
+        return marketProxy.marketCreatorTotalSharesLiquidationValue();
     }
 
     // ========== INTERNAL FUNCTIONS ==========

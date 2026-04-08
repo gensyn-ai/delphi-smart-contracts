@@ -35,7 +35,12 @@ interface IDynamicParimutuelMarket is
 
     /// @notice Emitted when the market creator submits the winning outcome.
     /// @param winningOutcomeIdx The index of the winning outcome.
-    event WinnerSubmitted(uint256 winningOutcomeIdx);
+    /// @param marketCreatorReward the reward related to the winning shares of the market creator
+    /// @param refund amount of tokens refunded from initial deposit
+    /// @param marketCreatorTradingFeesCut the part of the trading fees that goes to the market creator
+    event WinnerSubmitted(
+        uint256 winningOutcomeIdx, uint256 marketCreatorReward, uint256 refund, uint256 marketCreatorTradingFeesCut
+    );
 
     /// @notice Emitted when a user redeems winning shares for tokens.
     /// @param redeemer The address of the redeemer.
@@ -48,9 +53,7 @@ interface IDynamicParimutuelMarket is
     /// @param outcomeIndices The indices of the liquidated outcomes.
     /// @param sharesIn The amounts of shares liquidated per outcome.
     /// @param totalTokensOut The total amount of tokens received.
-    event Liquidation(
-        address indexed liquidator, uint256[] indexed outcomeIndices, uint256[] sharesIn, uint256 totalTokensOut
-    );
+    event Liquidation(address indexed liquidator, uint256[] outcomeIndices, uint256[] sharesIn, uint256 totalTokensOut);
 
     // ===== CONSTANTS =====
 
@@ -118,7 +121,9 @@ interface IDynamicParimutuelMarket is
     /// @notice Submits the winning outcome and distributes fees and creator rewards. Only callable by the gateway.
     /// @param caller The address submitting the winner (must be the market creator).
     /// @param winningOutcomeIdx The index of the winning outcome.
-    function submitWinner(address caller, uint256 winningOutcomeIdx) external;
+    function submitWinner(address caller, uint256 winningOutcomeIdx)
+        external
+        returns (uint256 marketCreatorReward, uint256 refund, uint256 marketCreatorTradingFeesCut);
 
     /// @notice Redeems a user's winning outcome shares for tokens. Only callable by the gateway.
     /// @param redeemer The address redeeming shares.
@@ -204,6 +209,17 @@ interface IDynamicParimutuelMarket is
     /// @return Whether the market creator's initial shares have been liquidated.
     function marketCreationSharesLiquidated() external view returns (bool);
 
+    /// @notice Calculates the token value of the market creator's initial shares if a specific outcome wins.
+    /// @dev This value represents the market creator's reward if they successfully submit the `winningOutcomeIdx`
+    ///      and the market settles. It's calculated as if the creator were redeeming their initial shares
+    ///      (`marketCreatorSharesPerOutcome`) for the winning outcome.
+    /// @param winningOutcomeIdx The index of the potential winning outcome.
+    /// @return tokensOut The settlement value in the market's collateral token.
+    function marketCreatorWinningSharesSettlementValue(uint256 winningOutcomeIdx)
+        external
+        view
+        returns (uint256 tokensOut);
+
     /// @return tokensOut The current token value of the market creator's initial shares.
-    function marketCreationSharesValue() external view returns (uint256 tokensOut);
+    function marketCreatorTotalSharesLiquidationValue() external view returns (uint256 tokensOut);
 }
