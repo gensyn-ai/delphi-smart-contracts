@@ -652,17 +652,17 @@ contract DynamicParimutuelMarket is
         marketCreationSharesLiquidated = true;
 
         // Get vars
-        uint256 liquidateionValue = marketCreatorTotalSharesLiquidationValue();
+        uint256 liquidationValue = marketCreatorTotalSharesLiquidationValue();
         uint256 tradingFees = _market.tradingFees;
         uint256 refund = _market.refund;
 
         // Effects: Update market
-        _market.pool -= liquidateionValue;
+        _market.pool -= liquidationValue;
         _market.tradingFees = 0;
         _market.refund = 0;
 
         // Interactions: Send  to TRADING_FEES_RECIPIENT
-        uint256 totalValue = liquidateionValue + tradingFees + refund;
+        uint256 totalValue = liquidationValue + tradingFees + refund;
         TOKEN.safeTransfer(TRADING_FEES_RECIPIENT, totalValue);
 
         // Return

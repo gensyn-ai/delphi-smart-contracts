@@ -150,11 +150,11 @@ interface IDynamicParimutuelGateway is IDynamicParimutuelGatewayErrors {
 
     // Market Creation
 
-    /// @notice breaks downs the initial deposit into initialPool and refund
+    /// @notice breaks down the initial deposit into initialPool and refund
     /// @param initialDeposit the amount of tokens to be deposited
     /// @param outcomeCount the number of outcomes in the market
     /// @return initialPool the amount of tokens that goes to the pool
-    /// @return refund  the amount of tokens to be refunded if the market is settled
+    /// @return refund the amount of tokens to be refunded if the market is settled
     function initialDepositBreakdown(uint256 initialDeposit, uint256 outcomeCount)
         external
         pure
