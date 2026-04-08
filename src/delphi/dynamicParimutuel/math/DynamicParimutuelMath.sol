@@ -216,8 +216,15 @@ library DynamicParimutuelMath {
     /// @param initialDeposit The initial deposit in token decimals.
     /// @param outcomeCount The number of outcomes.
     /// @return The initial pool size.
-    function initialPool(uint256 initialDeposit, uint256 outcomeCount) internal pure returns (uint256) {
+    function calculateInitialPool(uint256 initialDeposit, uint256 outcomeCount) internal pure returns (uint256) {
         return mulDivUp({a: initialDeposit, b: 1e18, denominator: sqrtDown(outcomeCount * 1e36)});
+    }
+
+    /// @param initialPool The initial pool size.
+    /// @param outcomeCount The number of outcomes.
+    /// @return The initial deposit in token decimals.
+    function calculateInitialDeposit(uint256 initialPool, uint256 outcomeCount) internal pure returns (uint256) {
+        return mulDivDown({a: initialPool, b: sqrtDown(outcomeCount * 1e36), denominator: 1e18});
     }
 
     /// @notice Calculates the token reward for a redeemer based on their share of winning outcome shares.

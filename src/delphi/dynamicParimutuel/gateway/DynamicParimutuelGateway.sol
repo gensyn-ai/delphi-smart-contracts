@@ -158,7 +158,9 @@ contract DynamicParimutuelGateway is IDynamicParimutuelGateway, Initializable {
         returns (uint256 marketCreatorReward, uint256 refund, uint256 marketCreatorTradingFeesCut)
     {
         // Effects: Emit event
-        emit GatewayWinnerSubmitted(marketProxy, winningOutcomeIdx);
+        emit GatewayWinnerSubmitted(
+            marketProxy, winningOutcomeIdx, marketCreatorReward, refund, marketCreatorTradingFeesCut
+        );
 
         // Checks/Effects/Interactions: Submit winner
         return IDynamicParimutuelMarket(marketProxy).submitWinner(msg.sender, winningOutcomeIdx);
@@ -204,13 +206,23 @@ contract DynamicParimutuelGateway is IDynamicParimutuelGateway, Initializable {
     // Market Creation
 
     /// @inheritdoc IDynamicParimutuelGateway
-    function initialDepositBreakdown(uint256 initialDeposit, uint256 outcomeCount)
+    function calculateInitialPoolAndRefund(uint256 initialDeposit, uint256 outcomeCount)
         external
         pure
         returns (uint256 initialPool, uint256 refund)
     {
-        initialPool = initialDeposit.initialPool(outcomeCount);
+        initialPool = initialDeposit.calculateInitialPool(outcomeCount);
         refund = initialDeposit - initialPool;
+    }
+
+    /// @inheritdoc IDynamicParimutuelGateway
+    function calculateInitialDepositAndRefund(uint256 initialPool, uint256 outcomeCount)
+        external
+        pure
+        returns (uint256 initialDeposit, uint256 refund)
+    {
+        initialDeposit = initialPool.calculateInitialDeposit(outcomeCount);
+        refund = initialPool - initialDeposit;
     }
 
     // Implementation Configuration

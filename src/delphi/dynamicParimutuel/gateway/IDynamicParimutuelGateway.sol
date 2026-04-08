@@ -45,7 +45,16 @@ interface IDynamicParimutuelGateway is IDynamicParimutuelGatewayErrors {
     /// @notice Emitted when a winning outcome is submitted for a market.
     /// @param marketProxy The market proxy contract.
     /// @param winningOutcomeIdx The index of the winning outcome.
-    event GatewayWinnerSubmitted(IDynamicParimutuelMarket indexed marketProxy, uint256 winningOutcomeIdx);
+    /// @param marketCreatorReward the reward related to the winning shares of the market creator
+    /// @param refund amount of tokens refunded from initial deposit
+    /// @param marketCreatorTradingFeesCut the part of the trading fees that goes to the market creator
+    event GatewayWinnerSubmitted(
+        IDynamicParimutuelMarket indexed marketProxy,
+        uint256 winningOutcomeIdx,
+        uint256 marketCreatorReward,
+        uint256 refund,
+        uint256 marketCreatorTradingFeesCut
+    );
 
     /// @notice Emitted when a user redeems winning shares for tokens.
     /// @param marketProxy The market proxy contract.
@@ -150,15 +159,25 @@ interface IDynamicParimutuelGateway is IDynamicParimutuelGatewayErrors {
 
     // Market Creation
 
-    /// @notice breaks down the initial deposit into initialPool and refund
+    /// @notice given a initial deposit, calculates initial pool and refund
     /// @param initialDeposit the amount of tokens to be deposited
     /// @param outcomeCount the number of outcomes in the market
     /// @return initialPool the amount of tokens that goes to the pool
     /// @return refund the amount of tokens to be refunded if the market is settled
-    function initialDepositBreakdown(uint256 initialDeposit, uint256 outcomeCount)
+    function calculateInitialPoolAndRefund(uint256 initialDeposit, uint256 outcomeCount)
         external
         pure
         returns (uint256 initialPool, uint256 refund);
+
+    /// @notice given an initial pool, calculates initial deposit and refund
+    /// @param initialPool the amount of tokens that goes to the pool
+    /// @param outcomeCount the number of outcomes in the market
+    /// @return initialDeposit the amount of tokens to be deposited
+    /// @return refund the amount of tokens to be refunded if the market is settled
+    function calculateInitialDepositAndRefund(uint256 initialPool, uint256 outcomeCount)
+        external
+        pure
+        returns (uint256 initialDeposit, uint256 refund);
 
     // Implementation Configuration
 

@@ -181,7 +181,7 @@ contract DynamicParimutuelMarket is
         assert(marketCreatorSharesPerOutcome > 0);
 
         // Calculate initial pool
-        uint256 initialPool = initialDeposit_.initialPool(newMarketConfig_.outcomeCount);
+        uint256 initialPool = initialDeposit_.calculateInitialPool(newMarketConfig_.outcomeCount);
         assert(initialPool > 0);
 
         // Checks: Ensure market is properly funded
