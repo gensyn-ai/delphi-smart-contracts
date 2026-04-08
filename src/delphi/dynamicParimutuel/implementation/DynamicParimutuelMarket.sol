@@ -181,7 +181,7 @@ contract DynamicParimutuelMarket is
         assert(marketCreatorSharesPerOutcome > 0);
 
         // Calculate initial pool
-        uint256 initialPool = initialDeposit_.poolAtCreation(newMarketConfig_.outcomeCount);
+        uint256 initialPool = initialDeposit_.initialPool(newMarketConfig_.outcomeCount);
         assert(initialPool > 0);
 
         // Checks: Ensure market is properly funded
@@ -194,15 +194,19 @@ contract DynamicParimutuelMarket is
         marketCreator = marketCreator_;
         _marketMetadata = newMarketMetadata_;
 
+        uint256 sumTerm36 = (marketCreatorSharesPerOutcome ** 2) * newMarketConfig_.outcomeCount;
+        assert(sumTerm36 > 0);
+
         // Effects: Save new market
-        _market.config = newMarketConfig_;
-        _market.initialPool = initialPool;
-        _market.pool = initialPool;
-        _market.refund = tokenBalance - initialPool;
-        _market.tradingFees = 0;
-        _market.winningOutcomeIdx = type(uint256).max; // Note: Sentinel value for "no winner yet"
-        _market.sumTerm36 = (marketCreatorSharesPerOutcome ** 2) * newMarketConfig_.outcomeCount;
-        assert(_market.sumTerm36 > 0);
+        _market = Market({
+            config: newMarketConfig_,
+            initialPool: initialPool,
+            pool: initialPool,
+            tradingFees: 0,
+            refund: tokenBalance - initialPool,
+            sumTerm36: sumTerm36,
+            winningOutcomeIdx: type(uint256).max // Note: Sentinel value for "no winner yet"
+        });
 
         // For each outcome
         for (uint256 outcomeIdx = 0; outcomeIdx < newMarketConfig_.outcomeCount; outcomeIdx++) {

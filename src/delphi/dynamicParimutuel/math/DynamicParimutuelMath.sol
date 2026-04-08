@@ -187,10 +187,11 @@ library DynamicParimutuelMath {
 
     /// @notice Calculates the number of shares per outcome minted at market creation.
     /// @dev Derivation:
-    // poolAtCreation = k * sharesPerOutcome * sqrt(outcomeCount)
-    // poolAtCreation = k * sqrt(outcomeCount) * initialDeposit / (k * outcomeCount)
-    // poolAtCreation = initialDeposit * sqrt(outcomeCount) / outcomeCount
-    // poolAtCreation = initialDeposit / sqrt(outcomeCount)
+    /// prices per share = K
+    /// total shares = shares per outcome * number of outcomes
+    /// initial deposit = prices per share * total shares
+    /// initial deposit = prices per share * shares per outcome * number of outcomes
+    /// shares per outcome = initial deposit / k * number of outcomes
     /// @param k The liquidity depth parameter.
     /// @param outcomeCount The number of outcomes.
     /// @param initialDeposit The initial deposit in token decimals.
@@ -206,11 +207,16 @@ library DynamicParimutuelMath {
     }
 
     /// @notice Calculates the initial token pool size at market creation.
-    /// @dev poolAtCreation = initialDeposit / sqrt(outcomeCount). Rounded up to ensure the pool is fully funded.
+
+    /// @dev Derivation:
+    // initialPool = k * sharesPerOutcome * sqrt(outcomeCount)
+    // initialPool = k * sqrt(outcomeCount) * initialDeposit / (k * outcomeCount)
+    // initialPool = initialDeposit * sqrt(outcomeCount) / outcomeCount
+    // initialPool = initialDeposit / sqrt(outcomeCount)
     /// @param initialDeposit The initial deposit in token decimals.
     /// @param outcomeCount The number of outcomes.
     /// @return The initial pool size.
-    function poolAtCreation(uint256 initialDeposit, uint256 outcomeCount) internal pure returns (uint256) {
+    function initialPool(uint256 initialDeposit, uint256 outcomeCount) internal pure returns (uint256) {
         return mulDivUp({a: initialDeposit, b: 1e18, denominator: sqrtDown(outcomeCount * 1e36)});
     }
 

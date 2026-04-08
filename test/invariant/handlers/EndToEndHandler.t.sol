@@ -294,11 +294,7 @@ contract EndToEndHandler is IEndToEndHandler, DelphiDeployer, DelphiTestUtils {
         }
 
         // Assert initial pool
-        assertEq(
-            market.pool,
-            market.initialPool,
-            "_createMarket: initial pool not equal to current pool"
-        );
+        assertEq(market.pool, market.initialPool, "_createMarket: initial pool not equal to current pool");
     }
 
     function _buyExactOut(BuyExactOutArgs calldata args) internal {
