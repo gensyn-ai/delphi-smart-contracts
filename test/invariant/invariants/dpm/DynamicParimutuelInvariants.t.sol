@@ -215,16 +215,20 @@ abstract contract DynamicParimutuel_Invariants is Invariants_Base, DelphiTestUti
         uint256 marketOutcomeCount = marketInfo.config.outcomeCount;
 
         // Initialize vars
-        uint256 termSum36;
+        // uint256 termSum36;
+        uint256 expSum;
 
         // For each outcome in the market
         for (uint256 outcomeIdx = 0; outcomeIdx < marketOutcomeCount; outcomeIdx++) {
+            
             // Add to term sum
-            termSum36 += market.totalSupply(outcomeIdx) ** 2;
+            // termSum36 += market.totalSupply(outcomeIdx) ** 2;
+            expSum += market.exp(outcomeIdx);
         }
 
         // Ensure sum(outcome) = market.currentSumTerm
-        assertEq(termSum36, marketInfo.expSum, "sum of outcome exps not = currentSumTerm");
+        // assertEq(termSum36, marketInfo.expSum, "sum of outcome exps not = currentSumTerm");
+        assertEq(expSum, marketInfo.expSum, "sum of outcome exps not = currentSumTerm");
     }
 
     // ========== PAYOUT TERMS ==========

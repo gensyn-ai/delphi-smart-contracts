@@ -672,4 +672,12 @@ contract DynamicParimutuelMarket is
             revert EmptyUriContentHash();
         }
     }
+
+    function exp(uint256 outcomeIdx) external view validOutcomeIdx(outcomeIdx) returns (uint256) {
+        return _exp(totalSupply(outcomeIdx));
+    }
+
+    function _exp(uint totalSupply_) external view returns (uint256) {
+        return ((totalSupply_ * 1e18) / _market.b)._computeExp();
+    }
 }

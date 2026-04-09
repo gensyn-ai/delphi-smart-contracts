@@ -1,4 +1,7 @@
 {
+  "lib/balancer-v3-monorepo": {
+    "rev": "ef0d3afec734955b6e0cc549c521594461ad6f3f"
+  },
   "lib/forge-std": {
     "rev": "8e40513d678f392f398620b3ef2b418648b33e89"
   },
