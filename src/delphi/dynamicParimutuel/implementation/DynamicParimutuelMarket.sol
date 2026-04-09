@@ -596,12 +596,12 @@ contract DynamicParimutuelMarket is
         }
 
         // Validate b
-        // if (b < MIN_B) {
-        //     revert KTooLow(b, MIN_B);
-        // }
-        // if (b > MAX_B) {
-        //     revert KTooHigh(b, MAX_B);
-        // }
+        if (b < MIN_B) {
+            revert KTooLow(b, MIN_B);
+        }
+        if (b > MAX_B) {
+            revert KTooHigh(b, MAX_B);
+        }
 
         // Validate trading fee
         if (config.tradingFee < MIN_TRADING_FEE) {
