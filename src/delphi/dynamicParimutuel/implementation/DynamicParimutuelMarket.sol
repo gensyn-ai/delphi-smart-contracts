@@ -677,7 +677,7 @@ contract DynamicParimutuelMarket is
         return _exp(totalSupply(outcomeIdx));
     }
 
-    function _exp(uint totalSupply_) external view returns (uint256) {
+    function _exp(uint256 totalSupply_) internal view returns (uint256) {
         return ((totalSupply_ * 1e18) / _market.b)._computeExp();
     }
 }

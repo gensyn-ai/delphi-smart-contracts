@@ -341,43 +341,42 @@ contract DynamicParimutuelGateway is IDynamicParimutuelGateway, Initializable {
         // Get market
         IDynamicParimutuelMarket.Market memory market = marketProxy.getMarket();
 
-        // console.log("((outcomeCurrentSupply + sharesOut) * 1e18 / market.b):", ((outcomeCurrentSupply + sharesOut) * 1e18 / market.b));
+        // Calculate & Validate outcome new exp input
         uint256 outcomeNewExpInput = ((outcomeCurrentSupply + sharesOut) * 1e18 / market.b);
         if (outcomeNewExpInput > LmsrMath.MAX_EXP_INPUT) {
             revert OutcomeNewExpInputTooLarge(outcomeNewExpInput, LmsrMath.MAX_EXP_INPUT);
         }
+
+        // Calculate exps
+        // Note: No rounding, to not propagate error to future trades
         uint256 outcomeNewExp = outcomeNewExpInput._computeExp();
         uint256 outcomeCurrentExp = (outcomeCurrentSupply * 1e18 / market.b)._computeExp();
 
-        // Calculate new sum term
+        // Checks: Calculate & Validate new sum term
         // Note: calculate most accurate approximation (nor upper nor lower bound)
         uint256 newExpSum = market.expSum + outcomeNewExp - outcomeCurrentExp;
-
-        // Checks: Ensure new sum term exceeds current one
         assert(newExpSum > market.expSum);
 
-        // Calculate sum term square roots
+        // Checks: Calculate & Validate sum term square roots
         // Note: Every operation is rounded against the user
         uint256 newExpSumUpperBound = newExpSum._getExpUpperBound();
         uint256 currentExpSumLowerBound = market.expSum._getExpLowerBound();
-
-        // Checks: Validate sum term square roots
         assert(newExpSumUpperBound > currentExpSumLowerBound);
 
-        // Calculate ratio
+        // Checks: Calculate & Validate ratio
         // Note: Ceil the div to round against the user
-        uint256 ratio = newExpSumUpperBound.mulDiv(1e18, currentExpSumLowerBound, Math.Rounding.Ceil);
+        uint256 ratio = newExpSumUpperBound.mulDivUp(1e18, currentExpSumLowerBound);
         assert(ratio > 1e18);
 
         // Calculate the upper bound of ln of ratio (to round against the user)
-        uint256 ratioLn = ratio._computeLnUpperBound();
+        uint256 ratioLnUpperBound = ratio._computeLnUpperBound();
 
         // Calculate fee adjusted b
         uint256 feeAdjustedB = market.b * (1e18 + market.config.tradingFee);
 
         // Checks: Calculate tokens in (with fee)
         // Note: To round against the user, we ceil the division
-        tokensIn = feeAdjustedB.mulDiv(ratioLn, 1e36 * TOKEN_DECIMAL_SCALER, Math.Rounding.Ceil);
+        tokensIn = feeAdjustedB.mulDiv(ratioLnUpperBound, 1e36 * TOKEN_DECIMAL_SCALER, Math.Rounding.Ceil);
         tokensIn += 1;
 
         // // Checks: Validate net tokens in
@@ -431,38 +430,33 @@ contract DynamicParimutuelGateway is IDynamicParimutuelGateway, Initializable {
 
         // Calculate new sum term
         // Note: calculate most accurate approximation (nor upper nor lower bound)
-        // uint256 newSumTerm36 = market.sumTerm36 - sharesIn * ((2 * outcomeCurrentSupply) - sharesIn);
         uint256 newExpSum = market.expSum + outcomeNewExp - outcomeCurrentExp;
-
-        // Checks: Ensure new sum term is below current one
-        // assert(newSumTerm36 < market.sumTerm36);
-        assert(newExpSum < market.expSum);
+        require(newExpSum < market.expSum, "newExpSum not < market.expSum");
 
         // Calculate sum term square roots
         // Note: Every operation is rounded against the user
-        uint256 newExpSumUpperBound = newExpSum._getExpUpperBound();
         uint256 currentExpSumLowerBound = market.expSum._getExpLowerBound();
-
-        // Checks: Validate sum term square roots
-        if (newExpSumUpperBound > currentExpSumLowerBound) {
+        uint256 newExpSumUpperBound = newExpSum._getExpUpperBound();
+        if (newExpSumUpperBound >= currentExpSumLowerBound) {
             revert SellOverlap();
         }
 
         // Calculate ratio
         // Note: instead of negating the log input (which causes numerical instability) and the output, flip the ratio
         // Note: Floor the div to round against the user
-        uint256 ratio = currentExpSumLowerBound.mulDiv(1e18, newExpSumUpperBound, Math.Rounding.Floor);
-        assert(ratio > 1e18);
+        uint256 ratio = currentExpSumLowerBound.mulDivDown(1e18, newExpSumUpperBound);
+        console.log("ratio:", ratio);
+        require(ratio < 1e18, "ratio not < 1e18");
 
         // Calculate lower bound of ln of ratio (to round against the user)
-        uint256 ratioLn = ratio._computeLnLowerBound();
+        uint256 ratioLnLowerBound = ratio._computeLnLowerBound();
 
         // Calculate fee adjusted b
         uint256 feeAdjustedB = market.b * (1e18 - market.config.tradingFee);
 
         // Calculate tokens out (with fee)
         // Note: To round against the user, we floor the division
-        tokensOut = feeAdjustedB.mulDiv(ratioLn, 1e36 * TOKEN_DECIMAL_SCALER, Math.Rounding.Floor);
+        tokensOut = feeAdjustedB.mulDiv(ratioLnLowerBound, 1e36 * TOKEN_DECIMAL_SCALER, Math.Rounding.Floor);
 
         // // Checks: Validate gross tokens out
         // if (grossTokensOut == 0) {

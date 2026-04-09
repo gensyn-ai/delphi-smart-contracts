@@ -206,4 +206,6 @@ interface IDynamicParimutuelMarket is
 
     /// @return tokensOut The current token value of the market creator's initial shares.
     // function marketCreationSharesValue() external view returns (uint256 tokensOut);
+
+    function exp(uint256 outcomeIdx) external view returns (uint256);
 }

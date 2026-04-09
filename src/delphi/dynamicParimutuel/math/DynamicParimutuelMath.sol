@@ -77,28 +77,29 @@ library DynamicParimutuelMath {
             revert IDynamicParimutuelMathErrors.ZeroSharesOut();
         }
 
+        // Calculate exps
+        // Note: No rounding, to not propagate error to future trades
         uint256 outcomeNewExp = ((outcomeCurrentSupply + sharesOut) * 1e18 / b)._computeExp();
         uint256 outcomeCurrentExp = (outcomeCurrentSupply * 1e18 / b)._computeExp();
 
-        // Calculate new Z
-        // Note: No rounding, to not propagate error to future trades
+        // Checks: Calculate and Validate new Z
         newZ = currentZ + outcomeNewExp - outcomeCurrentExp;
-
-        // Checks: Validate new Z
         assert(newZ > currentZ);
 
+        // Checks: Calculate and Validate Z bounds
+        uint256 newZUpperBound = newZ._getExpUpperBound();
+        uint256 currentZLowerBound = currentZ._getExpLowerBound();
+        assert(newZUpperBound > currentZLowerBound);
+
+        // Checks: Calculate & Validate ratio, rounded against user (up)
+        uint256 ratio = mulDivUp(newZUpperBound, 1e18, currentZLowerBound);
+        assert(ratio > 1e18);
+
+        // Calculate ln of ratio, rounded against user (up)
+        uint256 ratioLnUpperBound = ratio._computeLnUpperBound();
+
         // Check if buy is valid
-        valid = tokensIn * tokenDecimalScalar * 1e18
-            >= b * ((newZ._getExpUpperBound() * 1e18) / currentZ._getExpLowerBound())._computeLnUpperBound();
-        console.log("valid:", valid);
-        console.log(
-            "                                                         tokensIn * tokenDecimalScalar * 1e18:",
-            tokensIn * tokenDecimalScalar * 1e18
-        );
-        console.log(
-            "b * ((newZ._getExpUpperBound() * 1e18) / currentZ._getExpLowerBound())._computeLnUpperBound():",
-            b * ((newZ._getExpUpperBound() * 1e18) / currentZ._getExpLowerBound())._computeLnUpperBound()
-        );
+        valid = tokensIn * tokenDecimalScalar * 1e18 >= b * ratioLnUpperBound;
     }
 
     /// @notice Validates that a sell is economically sound: the tokens received do not exceed the cost reduction.
@@ -136,19 +137,31 @@ library DynamicParimutuelMath {
             revert IDynamicParimutuelMathErrors.ZeroTokensOut();
         }
 
+        // Calculate exps
+        // Note: No rounding, to not propagate error to future trades
         uint256 outcomeNewExp = ((outcomeCurrentSupply - sharesIn) * 1e18 / b)._computeExp();
         uint256 outcomeCurrentExp = (outcomeCurrentSupply * 1e18 / b)._computeExp();
 
-        // Calculate new sum term
-        // Note: No rounding, to not propagate error to future trades
+        // Checks: Calculate and Validate new Z
         newZ = currentZ + outcomeNewExp - outcomeCurrentExp;
-
-        // Checks: Validate new Z
         assert(newZ < currentZ);
 
+        // Checks: Calculate and Validate Z bounds
+        uint256 currentZLowerBound = currentZ._getExpLowerBound();
+        uint256 newZUpperBound = newZ._getExpUpperBound();
+        if (newZUpperBound >= currentZLowerBound) {
+            revert("sell overlap");
+        }
+
+        // Checks: Calculate & Validate ratio, rounded against user (down)
+        uint256 ratio = mulDivDown(currentZLowerBound, 1e18, newZUpperBound);
+        assert(ratio < 1e18);
+
+        // Calculate ln of ratio, rounded against user (down)
+        uint256 ratioLnLowerBound = ratio._computeLnLowerBound();
+
         // Check if sell is valid
-        valid = tokensOut * tokenDecimalScalar * 1e18
-            <= b * ((newZ._getExpLowerBound() * 1e18) / currentZ._getExpUpperBound())._computeLnLowerBound();
+        valid = tokensOut * tokenDecimalScalar * 1e18 <= b * ratioLnLowerBound;
     }
 
     // / @notice Calculates the spot price of a specific outcome.

@@ -220,7 +220,6 @@ abstract contract DynamicParimutuel_Invariants is Invariants_Base, DelphiTestUti
 
         // For each outcome in the market
         for (uint256 outcomeIdx = 0; outcomeIdx < marketOutcomeCount; outcomeIdx++) {
-            
             // Add to term sum
             // termSum36 += market.totalSupply(outcomeIdx) ** 2;
             expSum += market.exp(outcomeIdx);
