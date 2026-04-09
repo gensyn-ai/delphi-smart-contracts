@@ -71,13 +71,13 @@ contract DelphiTestUtils is BaseTest {
         randomElement = array[randomIdx];
     }
 
-    // b = initialLiquidity / ln(outcomeCount)
+    // b = (initialLiquidity_ * TOKEN_DECIMAL_SCALER * 1e18) / (newMarketConfig_.outcomeCount * 1e18)._computeLnLowerBound();
     //
-    // initialLiquidity / ln(outcomeCount) >= MIN_B
-    // initialLiquidity >= MIN_B * ln(outcomeCount)
+    // (initialLiquidity_ * TOKEN_DECIMAL_SCALER * 1e18) / (newMarketConfig_.outcomeCount * 1e18)._computeLnLowerBound() >= MIN_B
+    // initialLiquidity_ >= (MIN_B * (newMarketConfig_.outcomeCount * 1e18)._computeLnLowerBound()) / (TOKEN_DECIMAL_SCALER * 1e18)
     //
-    // initialLiquidity / ln(outcomeCount) <= MAX_B
-    // initialLiquidity <= MAX_B * ln(outcomeCount)
+    // (initialLiquidity_ * TOKEN_DECIMAL_SCALER * 1e18) / (newMarketConfig_.outcomeCount * 1e18)._computeLnLowerBound() <= MAX_B
+    // initialLiquidity <= (MAX_B * (newMarketConfig_.outcomeCount * 1e18)._computeLnLowerBound()) / (TOKEN_DECIMAL_SCALER * 1e18)
     function _boundDeployMarketArgs(
         IDynamicParimutuelMarket implementation,
         IEndToEndHandler.DeployMarketArgs memory args
@@ -86,14 +86,14 @@ contract DelphiTestUtils is BaseTest {
         IDynamicParimutuelMarket.MarketConfig memory newMarketConfig =
             _boundMarketConfig({implementation: implementation, config: args.newMarketConfig});
 
-        // uint minInitialLiquidity1 = implementation.MIN_INITIAL_LIQUIDITY();
-        // uint minInitialLiquidity2 = implementation.MIN_B() * (newMarketConfig.outcomeCount * 1e18)._computeLnUpperBound();
-        // uint minInitialLiquidity = minInitialLiquidity1 > minInitialLiquidity2 ? minInitialLiquidity1 : minInitialLiquidity2;
+        uint minInitialLiquidity1 = implementation.MIN_INITIAL_LIQUIDITY();
+        uint minInitialLiquidity2 = (implementation.MIN_B() * (newMarketConfig.outcomeCount * 1e18)._computeLnLowerBound()) / (implementation.TOKEN_DECIMAL_SCALER() * 1e18);
+        uint minInitialLiquidity = minInitialLiquidity1 > minInitialLiquidity2 ? minInitialLiquidity1 : minInitialLiquidity2;
         // console.log("minInitialLiquidity", minInitialLiquidity);
 
-        // uint maxInitialLiquidity1 = implementation.MAX_INITIAL_LIQUIDITY();
-        // uint maxInitialLiquidity2 = implementation.MAX_B() * (newMarketConfig.outcomeCount * 1e18)._computeLnLowerBound();
-        // uint maxInitialLiquidity = maxInitialLiquidity1 < maxInitialLiquidity2 ? maxInitialLiquidity1 : maxInitialLiquidity2;
+        uint maxInitialLiquidity1 = implementation.MAX_INITIAL_LIQUIDITY();
+        uint maxInitialLiquidity2 = (implementation.MAX_B() * (newMarketConfig.outcomeCount * 1e18)._computeLnLowerBound()) / (implementation.TOKEN_DECIMAL_SCALER() * 1e18);
+        uint maxInitialLiquidity = maxInitialLiquidity1 < maxInitialLiquidity2 ? maxInitialLiquidity1 : maxInitialLiquidity2;
         // console.log("maxInitialLiquidity", maxInitialLiquidity);
 
         // Return DeployMarkeArgs
@@ -102,7 +102,7 @@ contract DelphiTestUtils is BaseTest {
             marketCreator: args.marketCreator,
             newMarketConfig: newMarketConfig,
             initialLiquidity: bound(
-                args.initialLiquidity, implementation.MIN_INITIAL_LIQUIDITY(), implementation.MAX_INITIAL_LIQUIDITY()
+                args.initialLiquidity, minInitialLiquidity, maxInitialLiquidity
             ),
             winningOutcomeIdx: bound(args.winningOutcomeIdx, 0, newMarketConfig.outcomeCount - 1)
         });
