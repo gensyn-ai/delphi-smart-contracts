@@ -190,7 +190,7 @@ library DynamicParimutuelMath {
     // price per share = k
     // total shares = shares per outcome * number of outcomes
     // initial deposit = price per share * total shares
-    // initial deposit = price per share * shares per outcome * number of outcomes
+    // initial deposit = k * shares per outcome * number of outcomes
     // shares per outcome = initial deposit / (k * number of outcomes)
     /// @param k The liquidity depth parameter.
     /// @param outcomeCount The number of outcomes.
