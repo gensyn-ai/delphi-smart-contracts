@@ -10,12 +10,10 @@ After installing Foundry, run the following commands to install the project loca
 
 ```sh
 curl -L https://foundry.paradigm.xyz | bash && foundryup
-git clone https://github.com/gensyn-ai/node/
-cd node
+git clone https://github.com/gensyn-ai/delphi-smart-contracts/
+cd delphi-smart-contracts
 forge install
 ```
-
-Note: All the following scripts should be run from the `delphi/smart-contracts/` folder (not the project root)
 
 ## Running Scripts
 
