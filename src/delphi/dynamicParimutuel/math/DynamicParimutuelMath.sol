@@ -187,31 +187,44 @@ library DynamicParimutuelMath {
 
     /// @notice Calculates the number of shares per outcome minted at market creation.
     /// @dev Derivation:
-    // poolAtCreation = k * sharesPerOutcome * sqrt(outcomeCount)
-    // poolAtCreation = k * sqrt(outcomeCount) * initialLiquidity / (k * outcomeCount)
-    // poolAtCreation = initialLiquidity * sqrt(outcomeCount) / outcomeCount
-    // poolAtCreation = initialLiquidity / sqrt(outcomeCount)
+    // price per share = k
+    // total shares = shares per outcome * number of outcomes
+    // initial deposit = price per share * total shares
+    // initial deposit = k * shares per outcome * number of outcomes
+    // shares per outcome = initial deposit / (k * number of outcomes)
     /// @param k The liquidity depth parameter.
     /// @param outcomeCount The number of outcomes.
-    /// @param initialLiquidity The initial liquidity in token decimals.
+    /// @param initialDeposit The initial deposit in token decimals.
     /// @param tokenDecimalScalar The token decimal scaler (10^(18-decimals)).
     /// @return The number of shares per outcome.
     function sharesPerOutcomeAtMarketCreation(
         uint256 k,
         uint256 outcomeCount,
-        uint256 initialLiquidity,
+        uint256 initialDeposit,
         uint256 tokenDecimalScalar
     ) internal pure returns (uint256) {
-        return mulDivDown({a: initialLiquidity * tokenDecimalScalar, b: 1e18, denominator: k * outcomeCount});
+        return mulDivDown({a: initialDeposit * tokenDecimalScalar, b: 1e18, denominator: k * outcomeCount});
     }
 
     /// @notice Calculates the initial token pool size at market creation.
-    /// @dev poolAtCreation = initialLiquidity / sqrt(outcomeCount). Rounded up to ensure the pool is fully funded.
-    /// @param initialLiquidity The initial liquidity in token decimals.
+
+    /// @dev Derivation:
+    // initialPool = k * sharesPerOutcome * sqrt(outcomeCount)
+    // initialPool = k * sqrt(outcomeCount) * initialDeposit / (k * outcomeCount)
+    // initialPool = initialDeposit * sqrt(outcomeCount) / outcomeCount
+    // initialPool = initialDeposit / sqrt(outcomeCount)
+    /// @param initialDeposit The initial deposit in token decimals.
     /// @param outcomeCount The number of outcomes.
     /// @return The initial pool size.
-    function poolAtCreation(uint256 initialLiquidity, uint256 outcomeCount) internal pure returns (uint256) {
-        return mulDivUp({a: initialLiquidity, b: 1e18, denominator: sqrtDown(outcomeCount * 1e36)});
+    function calculateInitialPool(uint256 initialDeposit, uint256 outcomeCount) internal pure returns (uint256) {
+        return mulDivUp({a: initialDeposit, b: 1e18, denominator: sqrtDown(outcomeCount * 1e36)});
+    }
+
+    /// @param initialPool The initial pool size.
+    /// @param outcomeCount The number of outcomes.
+    /// @return The initial deposit in token decimals.
+    function calculateInitialDeposit(uint256 initialPool, uint256 outcomeCount) internal pure returns (uint256) {
+        return mulDivDown({a: initialPool, b: sqrtDown(outcomeCount * 1e36), denominator: 1e18});
     }
 
     /// @notice Calculates the token reward for a redeemer based on their share of winning outcome shares.

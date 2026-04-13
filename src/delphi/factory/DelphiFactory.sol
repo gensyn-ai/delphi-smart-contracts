@@ -82,21 +82,21 @@ contract DelphiFactory is IDelphiFactory {
 
     // Permissionless
     function deployNewMarketProxy(
-        uint256 initialLiquidity_,
+        uint256 initialDeposit_,
         IDelphiMarket.VerifiableUri calldata newMarketMetadata_,
         bytes calldata newMarketInitializationCalldata_
     ) external returns (address newMarketProxy) {
         // Interactions: Deploy new market proxy
         newMarketProxy = IMPLEMENTATION.clone();
 
-        // Interactions: Pull initial liquidity into new market proxy
-        TOKEN.safeTransferFrom(msg.sender, newMarketProxy, initialLiquidity_);
+        // Interactions: Pull initial deposit into new market proxy
+        TOKEN.safeTransferFrom(msg.sender, newMarketProxy, initialDeposit_);
 
         // Interactions: Initialize new market proxy
         IDelphiMarket(newMarketProxy)
             .initialize({
                 marketCreator_: msg.sender,
-                initialLiquidity_: initialLiquidity_,
+                initialDeposit_: initialDeposit_,
                 newMarketMetadata_: newMarketMetadata_,
                 initializationCalldata_: newMarketInitializationCalldata_
             });

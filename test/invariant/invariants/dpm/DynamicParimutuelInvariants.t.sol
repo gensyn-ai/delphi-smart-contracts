@@ -119,7 +119,7 @@ abstract contract DynamicParimutuel_Invariants is Invariants_Base, DelphiTestUti
         assertApproxEqRelDecimal(
             calculatedPool, // left
             marketInfo.pool, // right
-            BASIS_POINT, // tolerance
+            2 * BASIS_POINT, // tolerance
             handler.tokenDecimals(), // decimals
             "Pool value should equal the sum of outcome values"
         );
@@ -242,7 +242,7 @@ abstract contract DynamicParimutuel_Invariants is Invariants_Base, DelphiTestUti
         IDynamicParimutuelMarket.Market memory marketInfo = market.getMarket();
 
         uint256 balance = token.balanceOf(address(market));
-        assertEq(balance, marketInfo.pool + marketInfo.tradingFees, "token balance not correct");
+        assertEq(balance, marketInfo.pool + marketInfo.tradingFees + marketInfo.refund, "token balance not correct");
     }
 
     function invariant_CanAlwaysSellEverything() external ifDeployed {

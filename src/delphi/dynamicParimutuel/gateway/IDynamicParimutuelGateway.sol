@@ -45,7 +45,16 @@ interface IDynamicParimutuelGateway is IDynamicParimutuelGatewayErrors {
     /// @notice Emitted when a winning outcome is submitted for a market.
     /// @param marketProxy The market proxy contract.
     /// @param winningOutcomeIdx The index of the winning outcome.
-    event GatewayWinnerSubmitted(IDynamicParimutuelMarket indexed marketProxy, uint256 winningOutcomeIdx);
+    /// @param marketCreatorReward the reward related to the winning shares of the market creator
+    /// @param refund amount of tokens refunded from initial deposit
+    /// @param marketCreatorTradingFeesCut the part of the trading fees that goes to the market creator
+    event GatewayWinnerSubmitted(
+        IDynamicParimutuelMarket indexed marketProxy,
+        uint256 winningOutcomeIdx,
+        uint256 marketCreatorReward,
+        uint256 refund,
+        uint256 marketCreatorTradingFeesCut
+    );
 
     /// @notice Emitted when a user redeems winning shares for tokens.
     /// @param marketProxy The market proxy contract.
@@ -65,7 +74,7 @@ interface IDynamicParimutuelGateway is IDynamicParimutuelGatewayErrors {
     event GatewayLiquidation(
         IDynamicParimutuelMarket indexed marketProxy,
         address indexed liquidator,
-        uint256[] indexed outcomeIndices,
+        uint256[] outcomeIndices,
         uint256[] sharesIn,
         uint256 totalTokensOut
     );
@@ -101,7 +110,12 @@ interface IDynamicParimutuelGateway is IDynamicParimutuelGatewayErrors {
     /// @notice Submits the winning outcome for a market.
     /// @param marketProxy The market proxy contract.
     /// @param winningOutcomeIdx The index of the winning outcome.
-    function submitWinner(IDynamicParimutuelMarket marketProxy, uint256 winningOutcomeIdx) external;
+    /// @return marketCreatorReward the reward related to the winning shares of the market creator
+    /// @return refund the part of the initial deposit that doesnt go to the pool
+    /// @return marketCreatorTradingFeesCut the part of the trading fees that goes to the market creator
+    function submitWinner(IDynamicParimutuelMarket marketProxy, uint256 winningOutcomeIdx)
+        external
+        returns (uint256 marketCreatorReward, uint256 refund, uint256 marketCreatorTradingFeesCut);
 
     /// @notice Redeems the caller's winning outcome shares for tokens.
     /// @param marketProxy The market proxy contract.
@@ -142,6 +156,28 @@ interface IDynamicParimutuelGateway is IDynamicParimutuelGatewayErrors {
     /// @notice Returns the Delphi factory contract.
     /// @return The factory contract address.
     function delphiFactory() external view returns (IDelphiFactory);
+
+    // Market Creation
+
+    /// @notice given a initial deposit, calculates initial pool and refund
+    /// @param initialDeposit the amount of tokens to be deposited
+    /// @param outcomeCount the number of outcomes in the market
+    /// @return initialPool the amount of tokens that goes to the pool
+    /// @return refund the amount of tokens to be refunded if the market is settled
+    function calculateInitialPoolAndRefund(uint256 initialDeposit, uint256 outcomeCount)
+        external
+        pure
+        returns (uint256 initialPool, uint256 refund);
+
+    /// @notice given an initial pool, calculates initial deposit and refund
+    /// @param initialPool the amount of tokens that goes to the pool
+    /// @param outcomeCount the number of outcomes in the market
+    /// @return initialDeposit the amount of tokens to be deposited
+    /// @return refund the amount of tokens to be refunded if the market is settled
+    function calculateInitialDepositAndRefund(uint256 initialPool, uint256 outcomeCount)
+        external
+        pure
+        returns (uint256 initialDeposit, uint256 refund);
 
     // Implementation Configuration
 
@@ -195,15 +231,15 @@ interface IDynamicParimutuelGateway is IDynamicParimutuelGatewayErrors {
     /// @return The maximum settlement window in seconds.
     function maxSettlementWindow(IDynamicParimutuelMarket marketProxy) external view returns (uint256);
 
-    /// @notice Returns the minimum initial liquidity required to create a market.
+    /// @notice Returns the minimum initial deposit required to create a market.
     /// @param marketProxy The market proxy contract.
-    /// @return The minimum initial liquidity.
-    function minInitialLiquidity(IDynamicParimutuelMarket marketProxy) external view returns (uint256);
+    /// @return The minimum initial deposit.
+    function minInitialDeposit(IDynamicParimutuelMarket marketProxy) external view returns (uint256);
 
-    /// @notice Returns the maximum initial liquidity allowed when creating a market.
+    /// @notice Returns the maximum initial deposit allowed when creating a market.
     /// @param marketProxy The market proxy contract.
-    /// @return The maximum initial liquidity.
-    function maxInitialLiquidity(IDynamicParimutuelMarket marketProxy) external view returns (uint256);
+    /// @return The maximum initial deposit.
+    function maxInitialDeposit(IDynamicParimutuelMarket marketProxy) external view returns (uint256);
 
     // Quoting
 
@@ -367,8 +403,22 @@ interface IDynamicParimutuelGateway is IDynamicParimutuelGatewayErrors {
     /// @param marketProxy The market proxy contract.
     function marketCreationSharesLiquidated(IDynamicParimutuelMarket marketProxy) external view returns (bool);
 
-    /// @notice Returns the current token value of the market creator's initial shares.
+    /// @notice Calculates the token value of the market creator's initial shares if a specific outcome wins.
+    /// @dev This value represents the market creator's reward if they successfully submit the `winningOutcomeIdx`
+    ///      and the market settles. It's calculated as if the creator were redeeming their initial shares
+    ///      (`marketCreatorSharesPerOutcome`) for the winning outcome.
     /// @param marketProxy The market proxy contract.
-    /// @return The token value of the creator's shares across all outcomes.
-    function marketCreationSharesValue(IDynamicParimutuelMarket marketProxy) external view returns (uint256);
+    /// @param winningOutcomeIdx The index of the potential winning outcome.
+    /// @return tokensOut The settlement value in the market's collateral token.
+    function marketCreatorWinningSharesSettlementValue(IDynamicParimutuelMarket marketProxy, uint256 winningOutcomeIdx)
+        external
+        view
+        returns (uint256 tokensOut);
+
+    /// @return tokensOut The current token value of the market creator's initial shares.
+    /// @param marketProxy The market proxy contract.
+    function marketCreatorTotalSharesLiquidationValue(IDynamicParimutuelMarket marketProxy)
+        external
+        view
+        returns (uint256 tokensOut);
 }

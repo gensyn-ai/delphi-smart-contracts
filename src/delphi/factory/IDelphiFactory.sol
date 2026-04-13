@@ -40,7 +40,7 @@ interface IDelphiFactory is IDelphiFactoryErrors {
     // ========== FUNCTIONS ==========
 
     function deployNewMarketProxy(
-        uint256 initialLiquidity_,
+        uint256 initialDeposit_,
         IDelphiMarket.VerifiableUri calldata newMarketMetadata,
         bytes calldata newMarketInitializationCalldata
     ) external returns (address newMarketProxy);

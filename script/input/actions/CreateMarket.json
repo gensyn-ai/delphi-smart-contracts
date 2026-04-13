@@ -1,6 +1,6 @@
 {
     "delphiFactory": "0x0000000000000000000000000000000000000000",
-    "initialLiquidity": 0,
+    "initialDeposit": 0,
     "newMarketMetadata": {
         "uri": "",
         "uriContentHash": "0x0000000000000000000000000000000000000000000000000000000000000000"

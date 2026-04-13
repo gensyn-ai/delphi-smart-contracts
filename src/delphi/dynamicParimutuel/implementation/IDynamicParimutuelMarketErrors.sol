@@ -10,8 +10,8 @@ interface IDynamicParimutuelMarketErrors is IDynamicParimutuelMarketTypes, IDyna
     error EmptyOutcomeIndices();
     error EmptyUri();
     error EmptyUriContentHash();
-    error InitialLiquidityTooHigh(uint256 provided, uint256 maximum);
-    error InitialLiquidityTooLow(uint256 provided, uint256 minimum);
+    error InitialDepositTooHigh(uint256 provided, uint256 maximum);
+    error InitialDepositTooLow(uint256 provided, uint256 minimum);
     error InvalidBuy();
     error InvalidSell();
     error KTooHigh(uint256 provided, uint256 maximum);
