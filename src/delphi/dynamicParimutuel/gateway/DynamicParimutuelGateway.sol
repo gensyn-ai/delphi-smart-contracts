@@ -16,6 +16,7 @@ import {
 } from "src/delphi/dynamicParimutuel/implementation/IDynamicParimutuelMarketErrors.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {IDelphiFactory} from "src/delphi/factory/IDelphiFactory.sol";
+import {IERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
 
 // Libraries
 import {DynamicParimutuelMath} from "src/delphi/dynamicParimutuel/math/DynamicParimutuelMath.sol";
@@ -113,7 +114,7 @@ contract DynamicParimutuelGateway is IDynamicParimutuelGateway, Initializable {
         uint256 outcomeIdx,
         uint256 sharesOut,
         uint256 maxTokensIn
-    ) external ifDeployedByFactory(marketProxy) returns (uint256 tokensIn) {
+    ) public ifDeployedByFactory(marketProxy) returns (uint256 tokensIn) {
         // Calculate tokens in
         tokensIn = quoteBuyExactOut(marketProxy, outcomeIdx, sharesOut);
 
@@ -127,6 +128,31 @@ contract DynamicParimutuelGateway is IDynamicParimutuelGateway, Initializable {
 
         // Checks/Effects/Interactions: Buy
         IDynamicParimutuelMarket(marketProxy).buy(msg.sender, outcomeIdx, tokensIn, sharesOut);
+    }
+
+    /// @inheritdoc IDynamicParimutuelGateway
+    function buyExactOutWithPermit(
+        IDynamicParimutuelMarket marketProxy,
+        uint256 outcomeIdx,
+        uint256 sharesOut,
+        uint256 maxTokensIn,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external ifDeployedByFactory(marketProxy) returns (uint256 tokensIn) {
+        IERC20Permit(address(TOKEN))
+            .permit({
+                owner: msg.sender,
+                spender: address(marketProxy),
+                value: maxTokensIn,
+                deadline: deadline,
+                v: v,
+                r: r,
+                s: s
+            });
+
+        return buyExactOut(marketProxy, outcomeIdx, sharesOut, maxTokensIn);
     }
 
     /// @inheritdoc IDynamicParimutuelGateway

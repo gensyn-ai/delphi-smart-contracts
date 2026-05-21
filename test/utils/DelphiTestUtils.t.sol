@@ -16,7 +16,7 @@ import {
 import {
     IDynamicParimutuelMarketErrors
 } from "src/delphi/dynamicParimutuel/implementation/IDynamicParimutuelMarketErrors.sol";
-import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import {IERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
 import {IEndToEndHandler} from "../invariant/handlers/IEndToEndHandler.sol";
 import {IDelphiMarket} from "src/delphi/IDelphiMarket.sol";
 
@@ -242,7 +242,7 @@ contract DelphiTestUtils is BaseTest {
         );
     }
 
-    function _buy(
+    function _buyWithApproval(
         address buyer,
         IDynamicParimutuelGateway marketGateway,
         IDynamicParimutuelMarket marketProxy,
@@ -272,31 +272,143 @@ contract DelphiTestUtils is BaseTest {
         _assertPriceLessThanK(info);
         _assertPriceGreaterThanSpot(info, marketProxy.spotPrice(outcomeIdx));
 
-        IERC20Metadata gensynTokenProxy = marketGateway.TOKEN();
+        {
+            // Get buyer tokens
+            uint256 buyerTokens = marketGateway.TOKEN().balanceOf(buyer);
 
-        // Get buyer tokens
-        uint256 buyerTokens = gensynTokenProxy.balanceOf(buyer);
-
-        // If buyer has insufficient tokens, deal
-        if (buyerTokens < tokensIn) {
-            deal(address(gensynTokenProxy), buyer, tokensIn);
+            // If buyer has insufficient tokens, deal
+            if (buyerTokens < tokensIn) {
+                deal(address(marketGateway.TOKEN()), buyer, tokensIn);
+            }
         }
 
         // Switch to buyer
         _useNewSender(buyer);
 
+        uint256 maxTokensInBound = bound(maxTokensIn, tokensIn, type(uint256).max);
+
         // Approve tokens in
-        gensynTokenProxy.approve(address(marketProxy), tokensIn);
+        marketGateway.TOKEN().approve(address(marketProxy), tokensIn);
 
         // Buy
         marketGateway.buyExactOut({
-            marketProxy: marketProxy,
-            outcomeIdx: outcomeIdx,
-            sharesOut: sharesOut,
-            maxTokensIn: bound(maxTokensIn, tokensIn, type(uint256).max)
+            marketProxy: marketProxy, outcomeIdx: outcomeIdx, sharesOut: sharesOut, maxTokensIn: maxTokensInBound
         });
 
         _assertPriceLessThanSpot(info, marketProxy.spotPrice(outcomeIdx));
+
+        return (true, 0, tokensIn);
+    }
+
+    function _getMemPtr() internal pure returns (uint256 ptr) {
+        assembly ("memory-safe") {
+            ptr := mload(0x40)
+        }
+    }
+
+    function _setMemPtr(uint256 ptr) internal pure {
+        assembly ("memory-safe") {
+            mstore(0x40, ptr)
+        }
+    }
+
+    struct BuyWithPermitVars {
+        AssertionHelperInfo info;
+        address buyer;
+        uint256 maxTokensInBound;
+        uint256 nonce;
+        uint256 deadline;
+        bytes32 permitStructHash;
+        bytes32 digest;
+        uint8 v;
+        bytes32 r;
+        bytes32 s;
+    }
+
+    function _buyWithPermit(
+        uint256 buyerPk,
+        IDynamicParimutuelGateway marketGateway,
+        IDynamicParimutuelMarket marketProxy,
+        uint256 outcomeIdx,
+        uint256 sharesOut,
+        uint256 maxTokensIn
+    )
+        internal
+        returns (
+            bool, /*success*/
+            bytes4, /*errSelector*/
+            uint256 /*tokensIn*/
+        )
+    {
+        uint256 ptr = _getMemPtr();
+
+        BuyWithPermitVars memory vars;
+
+        uint256 tokensIn;
+        {
+            // Get tokens in
+            (bool success, bytes4 errSelector, uint256 _tokensIn) =
+                _quoteBuyExactOut(marketGateway, marketProxy, outcomeIdx, sharesOut);
+            if (!success) {
+                return (false, errSelector, 0);
+            }
+            tokensIn = _tokensIn;
+        }
+
+        vars.info = _buyAssertionHelper(marketProxy, sharesOut, tokensIn);
+        _assertPriceLessThanK(vars.info);
+        _assertPriceGreaterThanSpot(vars.info, marketProxy.spotPrice(outcomeIdx));
+
+        vars.buyer = vm.addr(buyerPk);
+
+        {
+            // Get buyer tokens
+            uint256 buyerTokens = marketGateway.TOKEN().balanceOf(vars.buyer);
+
+            // If buyer has insufficient tokens, deal
+            if (buyerTokens < tokensIn) {
+                deal(address(marketGateway.TOKEN()), vars.buyer, tokensIn);
+            }
+        }
+
+        // Switch to buyer
+        _useNewSender(vars.buyer);
+
+        vars.maxTokensInBound = bound(maxTokensIn, tokensIn, type(uint256).max);
+        vars.nonce = IERC20Permit(address(marketGateway.TOKEN())).nonces(vars.buyer);
+        vars.deadline = block.timestamp + 1 days;
+
+        vars.permitStructHash = keccak256(
+            abi.encode(
+                keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)"),
+                vars.buyer,
+                address(marketProxy),
+                vars.maxTokensInBound,
+                vars.nonce,
+                vars.deadline
+            )
+        );
+        vars.digest = keccak256(
+            abi.encodePacked(
+                "\x19\x01", IERC20Permit(address(marketGateway.TOKEN())).DOMAIN_SEPARATOR(), vars.permitStructHash
+            )
+        );
+        (vars.v, vars.r, vars.s) = vm.sign(buyerPk, vars.digest);
+
+        marketGateway.buyExactOutWithPermit({
+            marketProxy: marketProxy,
+            outcomeIdx: outcomeIdx,
+            sharesOut: sharesOut,
+            maxTokensIn: vars.maxTokensInBound,
+            deadline: vars.deadline,
+            v: vars.v,
+            r: vars.r,
+            s: vars.s
+        });
+
+        _assertPriceLessThanSpot(vars.info, marketProxy.spotPrice(outcomeIdx));
+
+        _setMemPtr(ptr);
 
         return (true, 0, tokensIn);
     }

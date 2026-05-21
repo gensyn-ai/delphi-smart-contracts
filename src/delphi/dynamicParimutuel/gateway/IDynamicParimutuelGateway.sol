@@ -94,6 +94,27 @@ interface IDynamicParimutuelGateway is IDynamicParimutuelGatewayErrors {
         uint256 maxTokensIn
     ) external returns (uint256 tokensIn);
 
+    /// @notice Buys an exact amount of outcome shares, spending at most `maxTokensIn` tokens, using ERC2612 permit for approval.
+    /// @param marketProxy The market proxy contract to buy from.
+    /// @param outcomeIdx The index of the outcome to buy.
+    /// @param sharesOut The exact number of outcome shares to receive.
+    /// @param maxTokensIn The maximum number of tokens the caller is willing to spend, and the amount to approve via permit.
+    /// @param deadline The deadline for the permit signature.
+    /// @param v The recovery byte of the signature.
+    /// @param r Half of the ECDSA signature pair.
+    /// @param s Half of the ECDSA signature pair.
+    /// @return tokensIn The actual number of tokens spent.
+    function buyExactOutWithPermit(
+        IDynamicParimutuelMarket marketProxy,
+        uint256 outcomeIdx,
+        uint256 sharesOut,
+        uint256 maxTokensIn,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external returns (uint256 tokensIn);
+
     /// @notice Sells an exact amount of outcome shares, receiving at least `minTokensOut` tokens.
     /// @param marketProxy The market proxy contract to sell to.
     /// @param outcomeIdx The index of the outcome to sell.

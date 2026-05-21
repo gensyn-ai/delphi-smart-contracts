@@ -2,8 +2,9 @@
 pragma solidity 0.8.30;
 
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {ERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Permit.sol";
 
-contract MockToken is ERC20("MockToken", "MT") {
+contract MockToken is ERC20("MockToken", "MT"), ERC20Permit("MockToken") {
     uint8 internal immutable _DECIMALS;
 
     address public immutable ADMIN;

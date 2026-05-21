@@ -306,17 +306,43 @@ contract EndToEndHandler is IEndToEndHandler, DelphiDeployer, DelphiTestUtils {
 
         // Bound buyer
         // Note: This avoids address(0), without the need for a vm.assume (which reduces coverage)
-        address buyer = _randomAddressFromPk(args.buyerPkSeed, 1, MAX_TRADER_COUNT);
+        (address buyer, uint256 buyerPk) = _randomAddressFromPk(args.buyerPkSeed, 1, MAX_TRADER_COUNT);
+
+        BuyType buyType = BuyType(_boundUint8(args.buyTypeSeed, 0, uint8(type(BuyType).max)));
+
+        bool success;
+        bytes4 errSelector;
+        if (buyType == BuyType.BUY_WITH_APPROVAL) {
+            (success, errSelector,) = _buyWithApproval({
+                buyer: buyer,
+                marketGateway: dynamicParimutuelGateway,
+                marketProxy: marketProxy,
+                outcomeIdx: outcomeIdx,
+                sharesOut: sharesOut,
+                maxTokensIn: args.maxTokensIn
+            });
+        } else {
+            (success, errSelector,) = _buyWithPermit({
+                buyerPk: buyerPk,
+                marketGateway: dynamicParimutuelGateway,
+                marketProxy: marketProxy,
+                outcomeIdx: outcomeIdx,
+                sharesOut: sharesOut,
+                maxTokensIn: args.maxTokensIn
+            });
+        }
 
         // Buy
-        (bool success, bytes4 errSelector,) = _buy({
-            buyer: buyer,
-            marketGateway: dynamicParimutuelGateway,
-            marketProxy: marketProxy,
-            outcomeIdx: outcomeIdx,
-            sharesOut: sharesOut,
-            maxTokensIn: args.maxTokensIn
-        });
+        // (bool success, bytes4 errSelector,) = _buy({
+        //     buyerPk: buyerPk,
+        //     buyer: buyer,
+        //     marketGateway: dynamicParimutuelGateway,
+        //     marketProxy: marketProxy,
+        //     buyWithPermit: buyType == BuyType.BUY_WITH_PERMIT,
+        //     outcomeIdx: outcomeIdx,
+        //     sharesOut: sharesOut,
+        //     maxTokensIn: args.maxTokensIn
+        // });
 
         if (!success) {
             _saveReturn(errSelector);
@@ -406,7 +432,7 @@ contract EndToEndHandler is IEndToEndHandler, DelphiDeployer, DelphiTestUtils {
 
     function _skipTime(SkipTimeArgs calldata args) internal {
         // Pick random skip action (SKIP_TO_SETTLE or SKIP_TO_EXPIRE)
-        SkipTimeAction action = SkipTimeAction(_boundUint8(args.action, 0, 1));
+        SkipTimeAction action = SkipTimeAction(_boundUint8(args.action, 0, uint8(type(SkipTimeAction).max)));
 
         // Initialize destination timestamp
         uint256 destinationTimestamp;
