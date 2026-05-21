@@ -332,18 +332,6 @@ contract EndToEndHandler is IEndToEndHandler, DelphiDeployer, DelphiTestUtils {
             });
         }
 
-        // Buy
-        // (bool success, bytes4 errSelector,) = _buy({
-        //     buyerPk: buyerPk,
-        //     buyer: buyer,
-        //     marketGateway: dynamicParimutuelGateway,
-        //     marketProxy: marketProxy,
-        //     buyWithPermit: buyType == BuyType.BUY_WITH_PERMIT,
-        //     outcomeIdx: outcomeIdx,
-        //     sharesOut: sharesOut,
-        //     maxTokensIn: args.maxTokensIn
-        // });
-
         if (!success) {
             _saveReturn(errSelector);
             return;
