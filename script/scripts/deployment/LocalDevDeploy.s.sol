@@ -21,17 +21,22 @@ contract LocalDevDeploy is Script {
         address gensynFoundation = vm.envAddress("GENSYN_FOUNDATION");
 
         // 1. Deploy MockToken (6 decimals, deployer as admin, no initial mint)
-        MockToken mockToken = new MockToken({_decimals: 6, admin: msg.sender, initialAmount: 0});
+        MockToken mockToken =
+            new MockToken({name: "MockToken", symbol: "MOCK", _decimals: 6, admin: msg.sender, initialAmount: 0});
         console.log("MockToken:", address(mockToken));
 
         // 2. Deploy DynamicParimutuelGateway
-        DynamicParimutuelGateway gateway = new DynamicParimutuelGateway(mockToken);
+        DynamicParimutuelGateway gateway = new DynamicParimutuelGateway(mockToken, msg.sender);
         address gatewayAddr = address(gateway);
         console.log("DynamicParimutuelGateway:", gatewayAddr);
 
         // 3. Deploy DynamicParimutuelMarket (implementation for cloning)
         DynamicParimutuelMarket marketImpl = new DynamicParimutuelMarket({
-            tradingFeesRecipient: gensynFoundation, gateway: gatewayAddr, tradingFeesRecipientPct: 0.1e18
+            tradingFeesRecipient: gensynFoundation,
+            gateway: gatewayAddr,
+            tradingFeesRecipientPct: 0.1e18,
+            keeperFee: 0,
+            oracleFee: 0
         });
         console.log("DynamicParimutuelMarket (impl):", address(marketImpl));
 

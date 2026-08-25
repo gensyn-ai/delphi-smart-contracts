@@ -326,7 +326,7 @@ abstract contract DynamicParimutuel_Invariants is Invariants_Base, DelphiTestUti
             uint256 sharesDelta = 1_000_000e18;
 
             // Buy
-            (bool successBuy,, uint256 tokensIn) = _buy({
+            (bool successBuy,, uint256 tokensIn) = _buyWithApproval({
                 buyer: trader,
                 marketGateway: handler.dynamicParimutuelGateway(),
                 marketProxy: market,

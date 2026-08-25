@@ -28,6 +28,7 @@ interface IDynamicParimutuelMarketTypes {
         OPEN, // 0: Trading is open. Market Creator cannot settle.
         AWAITING_SETTLEMENT, // 1: Trading is closed. Market Creator can settle
         SETTLED, // 2: If Market Creator settles before `settlementDeadline`
-        EXPIRED // 3: If Market Creator does not settle before `settlementDeadline`
+        EXPIRED, // 3: If Market Creator does not settle before `settlementDeadline`
+        FAILED // 4: Oracle explicitly failed to resolve the market
     }
 }

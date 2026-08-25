@@ -4,9 +4,11 @@ pragma solidity 0.8.30;
 // Inheritance
 import {IDynamicParimutuelGateway} from "src/delphi/dynamicParimutuel/gateway/IDynamicParimutuelGateway.sol";
 import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
+import {Ownable2Step, Ownable} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 
 // Interfaces
 import {IDelphiMarket} from "src/delphi/IDelphiMarket.sol";
+import {IOracle} from "src/delphi/IOracle.sol";
 import {IDynamicParimutuelMarket} from "src/delphi/dynamicParimutuel/implementation/IDynamicParimutuelMarket.sol";
 import {
     IDynamicParimutuelMarketTypes
@@ -16,6 +18,7 @@ import {
 } from "src/delphi/dynamicParimutuel/implementation/IDynamicParimutuelMarketErrors.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {IDelphiFactory} from "src/delphi/factory/IDelphiFactory.sol";
+import {IERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
 
 // Libraries
 import {DynamicParimutuelMath} from "src/delphi/dynamicParimutuel/math/DynamicParimutuelMath.sol";
@@ -25,7 +28,7 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 /// @notice Entry point for interacting with dynamic parimutuel markets.
 /// @dev After validating it was deployed by the registered factory, the gateway calls the market proxy (which in turn calls the market implementation).
 ///      All rounding in quote functions is done against the user to prevent value extraction.
-contract DynamicParimutuelGateway is IDynamicParimutuelGateway, Initializable {
+contract DynamicParimutuelGateway is IDynamicParimutuelGateway, Initializable, Ownable2Step {
     // ========== INTERNAL CONSTANTS ==========
     uint256 internal constant _MIN_TOKENS_DELTA_18 = 0.01e18;
 
@@ -47,12 +50,18 @@ contract DynamicParimutuelGateway is IDynamicParimutuelGateway, Initializable {
     /// @inheritdoc IDynamicParimutuelGateway
     IDelphiFactory public override delphiFactory;
 
+    /// @inheritdoc IDynamicParimutuelGateway
+    address public override oracleRelayer;
+
+    /// @inheritdoc IDynamicParimutuelGateway
+    mapping(address marketProxy => bool) public override settlementLocked;
+
     // ========== LIBRARIES ==========
     using DynamicParimutuelMath for uint256;
     using SafeERC20 for IERC20Metadata;
 
     // ========== CONSTRUCTOR ==========
-    constructor(IERC20Metadata token_) {
+    constructor(IERC20Metadata token_, address owner_) Ownable(owner_) {
         // Get token decimals
         uint8 tokenDecimals = token_.decimals();
 
@@ -85,6 +94,12 @@ contract DynamicParimutuelGateway is IDynamicParimutuelGateway, Initializable {
         _;
     }
 
+    /// @dev Reverts if the caller is not the oracle relayer.
+    modifier onlyOracleRelayer() {
+        _onlyOracleRelayer();
+        _;
+    }
+
     // ========== INITIALIZER ==========
 
     /// @notice Initializes the gateway with a Delphi factory. Can only be called once, by the deployer.
@@ -108,12 +123,37 @@ contract DynamicParimutuelGateway is IDynamicParimutuelGateway, Initializable {
     // ========== FUNCTIONS ==========
 
     /// @inheritdoc IDynamicParimutuelGateway
+    function buyExactOutWithPermit(
+        IDynamicParimutuelMarket marketProxy,
+        uint256 outcomeIdx,
+        uint256 sharesOut,
+        uint256 maxTokensIn,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external ifDeployedByFactory(marketProxy) returns (uint256 tokensIn) {
+        try IERC20Permit(address(TOKEN))
+            .permit({
+            owner: msg.sender, spender: address(marketProxy), value: maxTokensIn, deadline: deadline, v: v, r: r, s: s
+        }) {}
+        catch {
+            uint256 _allowance = TOKEN.allowance(msg.sender, address(marketProxy));
+            if (_allowance < maxTokensIn) {
+                revert AllowanceTooLow(_allowance, maxTokensIn);
+            }
+        }
+
+        return buyExactOut(marketProxy, outcomeIdx, sharesOut, maxTokensIn);
+    }
+
+    /// @inheritdoc IDynamicParimutuelGateway
     function buyExactOut(
         IDynamicParimutuelMarket marketProxy,
         uint256 outcomeIdx,
         uint256 sharesOut,
         uint256 maxTokensIn
-    ) external ifDeployedByFactory(marketProxy) returns (uint256 tokensIn) {
+    ) public ifDeployedByFactory(marketProxy) returns (uint256 tokensIn) {
         // Calculate tokens in
         tokensIn = quoteBuyExactOut(marketProxy, outcomeIdx, sharesOut);
 
@@ -152,19 +192,70 @@ contract DynamicParimutuelGateway is IDynamicParimutuelGateway, Initializable {
     }
 
     /// @inheritdoc IDynamicParimutuelGateway
-    function submitWinner(IDynamicParimutuelMarket marketProxy, uint256 winningOutcomeIdx)
-        external
-        ifDeployedByFactory(marketProxy)
-        returns (uint256 marketCreatorReward, uint256 refund, uint256 marketCreatorTradingFeesCut)
-    {
-        // Checks/Effects/Interactions: Submit winner
-        (marketCreatorReward, refund, marketCreatorTradingFeesCut) =
-            IDynamicParimutuelMarket(marketProxy).submitWinner(msg.sender, winningOutcomeIdx);
+    function setOracleRelayer(address oracleRelayer_) external onlyOwner {
+        if (oracleRelayer_ == address(0)) revert ZeroOracleRelayerAddress();
+
+        address previous = oracleRelayer;
+        oracleRelayer = oracleRelayer_;
+
+        emit OracleRelayerSet(previous, oracleRelayer_);
+    }
+
+    /// @inheritdoc IDynamicParimutuelGateway
+    function resolveMarket(address marketProxy) external ifDeployedByFactory(IDynamicParimutuelMarket(marketProxy)) {
+        // Defense-in-depth: unreachable for factory markets; invariant failsafe against future cross-contract changes.
+        if (oracleRelayer == address(0)) revert OracleRelayerNotSet();
+        if (settlementLocked[marketProxy]) revert SettlementAlreadyLocked(marketProxy);
+
+        // Effects: Lock settlement before calling out
+        settlementLocked[marketProxy] = true;
+
+        // Interactions: Transfer keeper fee first — the market's ifStatus(AWAITING_SETTLEMENT) guard is the
+        // authoritative check that the market is ready for resolution. Calling this before the oracle
+        // request ensures the transaction reverts early (before any oracle-side effects) if the market
+        // is not in the correct state.
+        IDynamicParimutuelMarket(marketProxy).transferKeeperFee(msg.sender);
+
+        // Interactions: Request resolution from oracle
+        IOracle(oracleRelayer).resolveMarket(marketProxy);
 
         // Effects: Emit event
-        emit GatewayWinnerSubmitted(
+        emit MarketResolutionRequested(marketProxy, msg.sender);
+    }
+
+    /// @inheritdoc IDynamicParimutuelGateway
+    function settleMarket(address marketProxy, uint256 winningOutcomeIdx, address oracleFeeRecipient)
+        external
+        onlyOracleRelayer
+        ifDeployedByFactory(IDynamicParimutuelMarket(marketProxy))
+    {
+        // Checks: a market can only be settled after a gateway-issued resolution request locked it.
+        if (!settlementLocked[marketProxy]) revert SettlementNotLocked(marketProxy);
+
+        // Interactions: Settle the market and transfer the oracle fee atomically (folded into settleMarket)
+        (uint256 marketCreatorReward, uint256 refund, uint256 marketCreatorTradingFeesCut) =
+            IDynamicParimutuelMarket(marketProxy).settleMarket(winningOutcomeIdx, oracleFeeRecipient);
+
+        emit GatewayMarketSettled(
             marketProxy, winningOutcomeIdx, marketCreatorReward, refund, marketCreatorTradingFeesCut
         );
+    }
+
+    /// @inheritdoc IDynamicParimutuelGateway
+    function failMarket(address marketProxy)
+        external
+        onlyOracleRelayer
+        ifDeployedByFactory(IDynamicParimutuelMarket(marketProxy))
+    {
+        // Checks: a market can only be failed after a gateway-issued resolution request locked it.
+        if (!settlementLocked[marketProxy]) revert SettlementNotLocked(marketProxy);
+
+        // Interactions: Fail the market. Oracle fee is returned to the creator inside
+        // _liquidateMarketCreationShares() — the single guaranteed execution point for
+        // both FAILED and EXPIRED paths — not here, to avoid double payment.
+        IDynamicParimutuelMarket(marketProxy).failMarket();
+
+        emit GatewayMarketFailed(marketProxy);
     }
 
     /// @inheritdoc IDynamicParimutuelGateway
@@ -686,5 +777,9 @@ contract DynamicParimutuelGateway is IDynamicParimutuelGateway, Initializable {
         if (marketProxy.marketStatus() != IDynamicParimutuelMarketTypes.MarketStatus.OPEN) {
             revert MarketNotOpen();
         }
+    }
+
+    function _onlyOracleRelayer() internal view {
+        if (msg.sender != oracleRelayer) revert NotOracleRelayer(msg.sender);
     }
 }

@@ -7,6 +7,7 @@ interface IDelphiFactoryErrors {
     error ZeroFeeRecipientAddress();
     error MarketCreationFeeTooLow(uint256 provided, uint256 minimum);
     error MarketCreationFeeTooHigh(uint256 provided, uint256 maximum);
+    error SettlementFeesExceedMarketCreationFee(uint256 settlementFees, uint256 marketCreationFee);
     error FirstIdxExceedsLastIdx(uint256 firstIdx, uint256 lastIdx);
     error LastIdxOutOfBounds(uint256 lastIdx, uint256 marketCount);
 }

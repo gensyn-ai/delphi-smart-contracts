@@ -38,7 +38,7 @@ contract DynamicParimutuelMarket is
     uint256 public constant override MIN_TRADING_WINDOW = 2 minutes;
     uint256 public constant override MAX_TRADING_WINDOW = 365 days;
     uint256 public constant override MIN_SETTLEMENT_WINDOW = 1 hours;
-    uint256 public constant override MAX_SETTLEMENT_WINDOW = 24 hours;
+    uint256 public constant override MAX_SETTLEMENT_WINDOW = 48 hours;
     uint256 public constant override MIN_TRADING_FEES_RECIPIENT_PCT = 0; // 0%
     uint256 public constant override MAX_TRADING_FEES_RECIPIENT_PCT = 1e18; // 100%
     uint256 internal constant _MIN_INITIAL_DEPOSIT_18 = 1e18;
@@ -52,6 +52,8 @@ contract DynamicParimutuelMarket is
     uint256 public immutable override TOKEN_DECIMAL_SCALER;
     uint256 public immutable override MIN_INITIAL_DEPOSIT;
     uint256 public immutable override MAX_INITIAL_DEPOSIT;
+    uint256 public immutable override KEEPER_FEE;
+    uint256 public immutable override ORACLE_FEE;
 
     // ===== INITIALIZATION IMMUTABLES =====
 
@@ -67,6 +69,12 @@ contract DynamicParimutuelMarket is
     uint256 public override outcomeSuppliesSum;
     /// @inheritdoc IDynamicParimutuelMarket
     bool public override marketCreationSharesLiquidated;
+    /// @inheritdoc IDynamicParimutuelMarket
+    bool public override marketFailed;
+    /// @inheritdoc IDynamicParimutuelMarket
+    uint256 public override createdAt;
+    /// @inheritdoc IDynamicParimutuelMarket
+    bool public override keeperFeePaid;
 
     // ===== LIBRARIES =====
     using DynamicParimutuelMath for uint256;
@@ -99,7 +107,13 @@ contract DynamicParimutuelMarket is
     /// @param tradingFeesRecipient The address that receives a portion of trading fees.
     /// @param gateway The gateway contract address.
     /// @param tradingFeesRecipientPct The percentage of fees sent to the recipient (18 decimal fixed-point).
-    constructor(address tradingFeesRecipient, address gateway, uint256 tradingFeesRecipientPct) {
+    constructor(
+        address tradingFeesRecipient,
+        address gateway,
+        uint256 tradingFeesRecipientPct,
+        uint256 keeperFee,
+        uint256 oracleFee
+    ) {
         // Checks: Validate input addresses
         if (tradingFeesRecipient == address(0)) {
             revert ZeroTradingFeesRecipientAddress();
@@ -131,6 +145,10 @@ contract DynamicParimutuelMarket is
         MIN_INITIAL_DEPOSIT = _MIN_INITIAL_DEPOSIT_18 / TOKEN_DECIMAL_SCALER;
         MAX_INITIAL_DEPOSIT = _MAX_INITIAL_DEPOSIT_18 / TOKEN_DECIMAL_SCALER;
 
+        // Effects: Set keeper and oracle fees
+        KEEPER_FEE = keeperFee;
+        ORACLE_FEE = oracleFee;
+
         // Effects: Disable initializations in this contract (can only be initialized through a proxy)
         _disableInitializers();
     }
@@ -155,6 +173,14 @@ contract DynamicParimutuelMarket is
         // Checks: Validate market creator
         if (address(marketCreator_) == address(0)) {
             revert ZeroMarketCreatorAddress();
+        }
+
+        // Checks: Ensure the gateway has an oracle relayer wired before a market can be created.
+        // Otherwise the market could only ever expire — resolveMarket would revert OracleRelayerNotSet
+        // on the gateway — stranding it (and forcing pro-rata liquidation) until settlementDeadline.
+        // Closing the race here makes it atomic with creation.
+        if (IDynamicParimutuelGateway(GATEWAY).oracleRelayer() == address(0)) {
+            revert GatewayOracleRelayerNotSet();
         }
 
         // Checks: Validate new market config
@@ -192,6 +218,7 @@ contract DynamicParimutuelMarket is
 
         // Effects: Set initialization immutables
         marketCreator = marketCreator_;
+        createdAt = block.timestamp;
         _marketMetadata = newMarketMetadata_;
 
         uint256 sumTerm36 = (marketCreatorSharesPerOutcome ** 2) * newMarketConfig_.outcomeCount;
@@ -304,18 +331,19 @@ contract DynamicParimutuelMarket is
     }
 
     /// @inheritdoc IDynamicParimutuelMarket
-    function submitWinner(address caller, uint256 winningOutcomeIdx)
+    /// @dev The oracle fee transfer is folded into this function (rather than a standalone
+    ///      transferOracleFee) so it is intrinsically once-only: settleMarket can only run while
+    ///      AWAITING_SETTLEMENT and sets the market to SETTLED, so a second call reverts before
+    ///      any second oracle-fee transfer is possible. `oracleFeeRecipient` is a pass-through —
+    ///      the market never stores or interprets it, preserving recipient-agnosticism.
+    function settleMarket(uint256 winningOutcomeIdx, address oracleFeeRecipient)
         external
         nonReentrant
         onlyGateway
         ifStatus(MarketStatus.AWAITING_SETTLEMENT)
         returns (uint256 marketCreatorReward, uint256 refund, uint256 marketCreatorTradingFeesCut)
     {
-        // Checks: Validate
         // Note: the winningOutcomeIdx is validated in the `totalSupply` view
-        if (caller != marketCreator) {
-            revert CallerNotMarketCreator(caller, marketCreator);
-        }
 
         // Cache trading fee
         uint256 tradingFees = _market.tradingFees;
@@ -336,7 +364,7 @@ contract DynamicParimutuelMarket is
         uint256 _marketCreatorTradingFeesCut = tradingFees - tradingFeesRecipientCut;
 
         // Effects: Emit event
-        emit WinnerSubmitted(winningOutcomeIdx, _marketCreatorReward, _refund, _marketCreatorTradingFeesCut);
+        emit MarketSettled(winningOutcomeIdx, _marketCreatorReward, _refund, _marketCreatorTradingFeesCut);
 
         // Interactions: Give tradingFeesRecipientCut to TRADING_FEES_RECIPIENT
         TOKEN.safeTransfer(TRADING_FEES_RECIPIENT, tradingFeesRecipientCut);
@@ -345,7 +373,40 @@ contract DynamicParimutuelMarket is
         uint256 marketCreatorTotal = _marketCreatorReward + _refund + _marketCreatorTradingFeesCut;
         TOKEN.safeTransfer(marketCreator, marketCreatorTotal);
 
+        // Interactions: Transfer oracle fee to the recipient (e.g. oracle treasury). No-op when zero.
+        if (ORACLE_FEE > 0) {
+            TOKEN.safeTransfer(oracleFeeRecipient, ORACLE_FEE);
+        }
+
         return (_marketCreatorReward, _refund, _marketCreatorTradingFeesCut);
+    }
+
+    /// @inheritdoc IDynamicParimutuelMarket
+    function transferKeeperFee(address keeper)
+        external
+        nonReentrant
+        onlyGateway
+        ifStatus(MarketStatus.AWAITING_SETTLEMENT)
+    {
+        // Mark that resolution occurred and the keeper fee has left the proxy. Set unconditionally
+        // (even when KEEPER_FEE == 0) so it reliably signals "resolveMarket happened" — used by
+        // _liquidateMarketCreationShares to decide whether the keeper fee is still reserved.
+        keeperFeePaid = true;
+        if (KEEPER_FEE > 0) {
+            TOKEN.safeTransfer(keeper, KEEPER_FEE);
+        }
+    }
+
+    /// @inheritdoc IDynamicParimutuelMarket
+    /// @dev ifStatus(AWAITING_SETTLEMENT) means this reverts if the market has naturally expired
+    ///      by the time the oracle callback arrives. In that case the relayer's delete on
+    ///      pendingRequests is rolled back, leaving a stale entry. This is harmless on two
+    ///      independent layers: (1) an honest WatchTower marks requests fulfilled before
+    ///      calling back and will never replay; (2) even a malicious WatchTower cannot exploit
+    ///      the stale entry — this guard ensures any replay attempt always reverts, making it
+    ///      a guaranteed no-op.
+    function failMarket() external nonReentrant onlyGateway ifStatus(MarketStatus.AWAITING_SETTLEMENT) {
+        marketFailed = true;
     }
 
     /// @inheritdoc IDynamicParimutuelMarket
@@ -394,19 +455,25 @@ contract DynamicParimutuelMarket is
         external
         nonReentrant
         onlyGateway
-        ifStatus(MarketStatus.EXPIRED)
         returns (uint256[] memory sharesIn, uint256 totalTokensOut)
     {
+        // Checks: Only valid in EXPIRED or FAILED status
+        MarketStatus _status = marketStatus();
+        if (_status != MarketStatus.EXPIRED && _status != MarketStatus.FAILED) {
+            revert MarketNotLiquidatable(_status);
+        }
+
         // Checks: Ensure outcomeIndices isn't empty
         if (outcomeIndices.length == 0) {
             revert EmptyOutcomeIndices();
         }
 
-        // If market creation shares haven't been liquidated
-        if (!marketCreationSharesLiquidated) {
-            // Effects/Interactions: Liquidate market creation shares
-            _liquidateMarketCreationShares();
-        }
+        // Note: creator-share liquidation is intentionally NOT performed here. It is decoupled into the
+        // standalone liquidateMarketCreationShares() so that a trader's exit never routes a token transfer
+        // to the market creator (or the fee recipients). If those addresses are ever blocked by the token
+        // (e.g. blacklist), traders can still recover their funds. Liquidations are order-independent
+        // (shares are moved to the contract, not burned), so calling this before or without the creator's
+        // liquidation is fully consistent.
 
         // Effects: Initialize array lengths
         sharesIn = new uint256[](outcomeIndices.length);
@@ -459,13 +526,11 @@ contract DynamicParimutuelMarket is
     }
 
     /// @inheritdoc IDynamicParimutuelMarket
-    function liquidateMarketCreationShares()
-        external
-        nonReentrant
-        onlyGateway
-        ifStatus(MarketStatus.EXPIRED)
-        returns (uint256 _totalTokensOut)
-    {
+    function liquidateMarketCreationShares() external nonReentrant onlyGateway returns (uint256 _totalTokensOut) {
+        MarketStatus _status = marketStatus();
+        if (_status != MarketStatus.EXPIRED && _status != MarketStatus.FAILED) {
+            revert MarketNotLiquidatable(_status);
+        }
         if (marketCreationSharesLiquidated) {
             revert MarketCreationSharesAlreadyLiquidated();
         }
@@ -485,7 +550,16 @@ contract DynamicParimutuelMarket is
     }
 
     /// @inheritdoc IDynamicParimutuelMarket
+    function isValidOutcomeIdx(uint256 outcomeIdx) external view returns (bool) {
+        return outcomeIdx < _market.config.outcomeCount;
+    }
+
+    /// @inheritdoc IDynamicParimutuelMarket
     function marketStatus() public view returns (MarketStatus) {
+        if (marketFailed) {
+            return MarketStatus.FAILED;
+        }
+
         if (block.timestamp <= _market.config.tradingDeadline) {
             return MarketStatus.OPEN;
         }
@@ -506,7 +580,7 @@ contract DynamicParimutuelMarket is
      * - The quoteBuyExactOut/quoteSellExactIn views (in the gateway)
      * - The buyExactOut/sellExactIn functions (in the gateway)
      * - The spotPrice/spotImpliedProbability/totalSupply views (in the gateway)
-     * - The buy/sell/submitWinner/liquidate functions (in the market)
+     * - The buy/sell/settleMarket/liquidate functions (in the market)
      * - The spotPrice/spotImpliedProbability views (in the market)
      * DO NOT REMOVE OR MODIFY WITHOUT FULLY UNDERSTANDING THE IMPLICATIONS.
     */
@@ -531,7 +605,7 @@ contract DynamicParimutuelMarket is
 
     /*
      * Note: THE `validOutcomeIdx` MODIFIER IS IMPORTANT HERE, AS IT PROTECTS:
-     * - The submitWinner/redeem/liquidate functions (in the market)
+     * - The settleMarket/redeem/liquidate functions (in the market)
      * DO NOT REMOVE OR MODIFY WITHOUT FULLY UNDERSTANDING THE IMPLICATIONS.
     */
     /// @inheritdoc IDynamicParimutuelMarket
@@ -642,10 +716,22 @@ contract DynamicParimutuelMarket is
         }
     }
 
-    /// @dev Liquidates the market creator's initial shares and sends the proceeds plus the accrued trading fees to the trading-fees recipient.
-    /// @return tokensOut The total tokens sent to the trading-fees recipient.
+    /// @dev Liquidates the market creator's initial shares and distributes proceeds.
+    ///      Called only when the market is EXPIRED or FAILED — never on a settled market.
+    ///      The market creator is made whole: they receive their shares liquidation value,
+    ///      the unused deposit refund, their cut of trading fees, and the oracle fee.
+    ///      TRADING_FEES_RECIPIENT receives only their percentage cut of trading fees.
+    ///
+    ///      The oracle fee is returned here (not in gateway.failMarket) because this
+    ///      function is the single guaranteed execution point for both EXPIRED and FAILED
+    ///      paths. Returning it in failMarket would cause a double payment when
+    ///      liquidateMarketCreationShares is subsequently called on a FAILED market.
+    ///      `marketCreationSharesLiquidated` ensures this runs exactly once.
+    ///
+    /// @return tokensOut The total tokens distributed across all recipients.
     function _liquidateMarketCreationShares() internal returns (uint256 tokensOut) {
-        // Checks: Ensure market creation shares haven't already been liquidated
+        // Checks: Ensure market creation shares haven't already been liquidated.
+        // This is the double-execution guard — guaranteed to run exactly once.
         assert(!marketCreationSharesLiquidated);
 
         // Effects: Mark market creation shares as liquidated
@@ -661,12 +747,42 @@ contract DynamicParimutuelMarket is
         _market.tradingFees = 0;
         _market.refund = 0;
 
-        // Interactions: Send  to TRADING_FEES_RECIPIENT
-        uint256 totalValue = liquidationValue + tradingFees + refund;
-        TOKEN.safeTransfer(TRADING_FEES_RECIPIENT, totalValue);
+        // Split trading fees the same way as settlement
+        uint256 tradingFeesRecipientCut =
+            tradingFees.tradingFeesRecipientCut({tradingFeesRecipientPct: TRADING_FEES_RECIPIENT_PCT});
+        uint256 marketCreatorTradingFeesCut = tradingFees - tradingFeesRecipientCut;
 
-        // Return
-        return totalValue;
+        // Interactions: Trading fees recipient gets their percentage cut only
+        if (tradingFeesRecipientCut > 0) {
+            TOKEN.safeTransfer(TRADING_FEES_RECIPIENT, tradingFeesRecipientCut);
+        }
+
+        // Interactions: Market creator gets shares value + refund + their trading fees cut + oracle fee.
+        // Oracle fee is included here because this is the only guaranteed execution point for
+        // both EXPIRED (implicit, no transition function) and FAILED paths. The oracle fee is always
+        // still in the proxy at liquidation: it is only ever disbursed in settleMarket (to the oracle
+        // treasury), and SETTLED is mutually exclusive with liquidation — so returning it is unconditional.
+        uint256 marketCreatorTotal = liquidationValue + refund + marketCreatorTradingFeesCut;
+        if (marketCreatorTotal > 0) {
+            TOKEN.safeTransfer(marketCreator, marketCreatorTotal);
+        }
+        if (ORACLE_FEE > 0) {
+            TOKEN.safeTransfer(marketCreator, ORACLE_FEE);
+        }
+
+        // Edge case: if the market reached a terminal state WITHOUT resolveMarket ever being called
+        // (i.e. it expired with no keeper triggering resolution), the keeper fee was never disbursed
+        // and is still reserved in the proxy. Return it to the creator. Unlike the oracle fee, the
+        // keeper fee CAN already be gone here — it is paid at resolve time (transferKeeperFee), which
+        // may precede expiry (e.g. resolve was called but the oracle never called back, then the
+        // market expired). `keeperFeePaid` distinguishes the two cases; status alone cannot.
+        uint256 keeperFeeReturned = 0;
+        if (!keeperFeePaid && KEEPER_FEE > 0) {
+            keeperFeeReturned = KEEPER_FEE;
+            TOKEN.safeTransfer(marketCreator, KEEPER_FEE);
+        }
+
+        return tradingFeesRecipientCut + marketCreatorTotal + ORACLE_FEE + keeperFeeReturned;
     }
 
     // ===== INTERNAL VIEW FUNCTIONS ====

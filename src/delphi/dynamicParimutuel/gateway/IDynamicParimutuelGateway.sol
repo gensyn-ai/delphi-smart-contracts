@@ -42,19 +42,33 @@ interface IDynamicParimutuelGateway is IDynamicParimutuelGatewayErrors {
         uint256 tokensOut
     );
 
-    /// @notice Emitted when a winning outcome is submitted for a market.
-    /// @param marketProxy The market proxy contract.
+    /// @notice Emitted when the oracle relayer address is updated.
+    /// @param previousRelayer The previous oracle relayer address.
+    /// @param newRelayer The new oracle relayer address.
+    event OracleRelayerSet(address indexed previousRelayer, address indexed newRelayer);
+
+    /// @notice Emitted when resolution is requested for a market.
+    /// @param marketProxy The market proxy address.
+    /// @param keeper The address that triggered resolution and received the keeper fee.
+    event MarketResolutionRequested(address indexed marketProxy, address indexed keeper);
+
+    /// @notice Emitted when a market is settled through the gateway.
+    /// @param marketProxy The market proxy contract address.
     /// @param winningOutcomeIdx The index of the winning outcome.
-    /// @param marketCreatorReward the reward related to the winning shares of the market creator
-    /// @param refund amount of tokens refunded from initial deposit
-    /// @param marketCreatorTradingFeesCut the part of the trading fees that goes to the market creator
-    event GatewayWinnerSubmitted(
-        IDynamicParimutuelMarket indexed marketProxy,
+    /// @param marketCreatorReward The settlement value of the market creator's winning shares.
+    /// @param refund The unused initial-deposit portion returned to the market creator.
+    /// @param marketCreatorTradingFeesCut The market creator's share of accrued trading fees.
+    event GatewayMarketSettled(
+        address indexed marketProxy,
         uint256 winningOutcomeIdx,
         uint256 marketCreatorReward,
         uint256 refund,
         uint256 marketCreatorTradingFeesCut
     );
+
+    /// @notice Emitted when a market is transitioned to FAILED status through the gateway.
+    /// @param marketProxy The market proxy contract address.
+    event GatewayMarketFailed(address indexed marketProxy);
 
     /// @notice Emitted when a user redeems winning shares for tokens.
     /// @param marketProxy The market proxy contract.
@@ -80,6 +94,27 @@ interface IDynamicParimutuelGateway is IDynamicParimutuelGatewayErrors {
     );
 
     // ========== FUNCTIONS ==========
+
+    /// @notice Buys an exact amount of outcome shares, spending at most `maxTokensIn` tokens, using ERC2612 permit for approval.
+    /// @param marketProxy The market proxy contract to buy from.
+    /// @param outcomeIdx The index of the outcome to buy.
+    /// @param sharesOut The exact number of outcome shares to receive.
+    /// @param maxTokensIn The maximum number of tokens the caller is willing to spend, and the amount to approve via permit.
+    /// @param deadline The deadline for the permit signature.
+    /// @param v The recovery byte of the signature.
+    /// @param r Half of the ECDSA signature pair.
+    /// @param s Half of the ECDSA signature pair.
+    /// @return tokensIn The actual number of tokens spent.
+    function buyExactOutWithPermit(
+        IDynamicParimutuelMarket marketProxy,
+        uint256 outcomeIdx,
+        uint256 sharesOut,
+        uint256 maxTokensIn,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external returns (uint256 tokensIn);
 
     /// @notice Buys an exact amount of outcome shares, spending at most `maxTokensIn` tokens.
     /// @param marketProxy The market proxy contract to buy from.
@@ -107,15 +142,26 @@ interface IDynamicParimutuelGateway is IDynamicParimutuelGatewayErrors {
         uint256 minTokensOut
     ) external returns (uint256 tokensOut);
 
-    /// @notice Submits the winning outcome for a market.
-    /// @param marketProxy The market proxy contract.
+    /// @notice Initiates the resolution process for a market. Permissionless — any keeper may call this.
+    ///         Sets the settlement lock and forwards the request to the oracle relayer.
+    /// @param marketProxy The market proxy contract address.
+    function resolveMarket(address marketProxy) external;
+
+    /// @notice Settles a market with the winning outcome. Only callable by the oracle relayer.
+    ///         Settles the market, then atomically transfers the oracle fee to the recipient.
+    /// @param marketProxy The market proxy contract address.
     /// @param winningOutcomeIdx The index of the winning outcome.
-    /// @return marketCreatorReward the reward related to the winning shares of the market creator
-    /// @return refund the part of the initial deposit that doesnt go to the pool
-    /// @return marketCreatorTradingFeesCut the part of the trading fees that goes to the market creator
-    function submitWinner(IDynamicParimutuelMarket marketProxy, uint256 winningOutcomeIdx)
-        external
-        returns (uint256 marketCreatorReward, uint256 refund, uint256 marketCreatorTradingFeesCut);
+    /// @param oracleFeeRecipient The address to receive the oracle fee (e.g. Truebit treasury).
+    function settleMarket(address marketProxy, uint256 winningOutcomeIdx, address oracleFeeRecipient) external;
+
+    /// @notice Transitions a market to FAILED status. Only callable by the oracle relayer.
+    ///         Returns the oracle fee to the market creator atomically.
+    /// @param marketProxy The market proxy contract address.
+    function failMarket(address marketProxy) external;
+
+    /// @notice Sets the oracle relayer address. Only callable by the owner.
+    /// @param oracleRelayer_ The new oracle relayer address.
+    function setOracleRelayer(address oracleRelayer_) external;
 
     /// @notice Redeems the caller's winning outcome shares for tokens.
     /// @param marketProxy The market proxy contract.
@@ -156,6 +202,13 @@ interface IDynamicParimutuelGateway is IDynamicParimutuelGatewayErrors {
     /// @notice Returns the Delphi factory contract.
     /// @return The factory contract address.
     function delphiFactory() external view returns (IDelphiFactory);
+
+    /// @notice Returns the oracle relayer address.
+    function oracleRelayer() external view returns (address);
+
+    /// @notice Returns whether settlement is currently locked for a market proxy.
+    /// @param marketProxy The market proxy contract address.
+    function settlementLocked(address marketProxy) external view returns (bool);
 
     // Market Creation
 

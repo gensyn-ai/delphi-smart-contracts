@@ -28,14 +28,20 @@ contract DeployDelphi_Script is DelphiDeployer, MockTokenDeployer, BaseScript {
         uint256 tradingFeesRecipientPct = json.readUint(".implementation.tradingFeesRecipientPct");
         address marketCreationFeeRecipient = json.readAddress(".factory.marketCreationFeeRecipient");
         uint256 marketCreationFee = json.readUint(".factory.marketCreationFee");
+        uint256 keeperFee = json.readUint(".factory.keeperFee");
+        uint256 oracleFee = json.readUint(".factory.oracleFee");
+        address gatewayOwner = json.readAddress(".gateway.owner");
 
         delphi = _deployDelphi(
             DelphiConfig({
                 tradingFeesRecipient: tradingFeesRecipient,
                 marketCreationFeeRecipient: marketCreationFeeRecipient,
                 marketCreationFee: marketCreationFee,
+                keeperFee: keeperFee,
+                oracleFee: oracleFee,
                 tradingFeesRecipientPct: tradingFeesRecipientPct,
-                token: token
+                token: token,
+                gatewayOwner: gatewayOwner
             })
         );
     }
@@ -49,7 +55,14 @@ contract DeployDelphi_Script is DelphiDeployer, MockTokenDeployer, BaseScript {
         address tokenAdmin = json.readAddress(".token.config.admin");
         uint256 tokenInitialAmount = json.readUint(".token.config.initialAmount");
 
+        string memory name = json.readString(".token.config.name");
+        string memory symbol = json.readString(".token.config.symbol");
+
         // Deploy Mock Token
-        return _deployMockToken(MockTokenConfig({admin: tokenAdmin, decimals: 6, initialSupply: tokenInitialAmount}));
+        return _deployMockToken(
+            MockTokenConfig({
+                name: name, symbol: symbol, admin: tokenAdmin, decimals: 6, initialSupply: tokenInitialAmount
+            })
+        );
     }
 }

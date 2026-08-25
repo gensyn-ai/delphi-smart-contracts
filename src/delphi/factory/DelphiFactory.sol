@@ -11,10 +11,16 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 
 // Interfaces
 import {IDelphiMarket} from "src/delphi/IDelphiMarket.sol";
+import {IDynamicParimutuelMarket} from "src/delphi/dynamicParimutuel/implementation/IDynamicParimutuelMarket.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 contract DelphiFactory is IDelphiFactory {
     // ========== CONSTANTS ==========
+    /// @dev A zero market-creation fee is permitted by design, but is only valid when SETTLEMENT_FEES
+    ///      (KEEPER_FEE + ORACLE_FEE on the market implementation) are also zero — the constructor enforces
+    ///      `SETTLEMENT_FEES <= MARKET_CREATION_FEE`. In practice a zero fee is therefore a local-dev/test
+    ///      configuration; production deployments that charge keeper/oracle fees must set a market-creation
+    ///      fee that covers them.
     uint256 internal constant _MIN_MARKET_CREATION_FEE_18 = 0;
     uint256 internal constant _MAX_MARKET_CREATION_FEE_18 = 100e18;
 
@@ -23,6 +29,7 @@ contract DelphiFactory is IDelphiFactory {
     address public immutable override IMPLEMENTATION;
     IERC20Metadata public immutable override TOKEN;
     uint256 public immutable override MARKET_CREATION_FEE;
+    uint256 public immutable override SETTLEMENT_FEES;
     uint256 public immutable override MIN_MARKET_CREATION_FEE;
     uint256 public immutable override MAX_MARKET_CREATION_FEE;
     address public immutable override MARKET_CREATION_FEE_RECIPIENT;
@@ -69,10 +76,20 @@ contract DelphiFactory is IDelphiFactory {
             revert ZeroFeeRecipientAddress();
         }
 
+        // Read settlement fees (keeper + oracle) from the market implementation
+        uint256 settlementFees = IDynamicParimutuelMarket(implementation).KEEPER_FEE()
+            + IDynamicParimutuelMarket(implementation).ORACLE_FEE();
+
+        // Checks: Validate settlement fees are covered by the market creation fee
+        if (settlementFees > marketCreationFee) {
+            revert SettlementFeesExceedMarketCreationFee(settlementFees, marketCreationFee);
+        }
+
         // Effects: Set immutables
         IMPLEMENTATION = implementation;
         TOKEN = token;
         MARKET_CREATION_FEE = marketCreationFee;
+        SETTLEMENT_FEES = settlementFees;
         MIN_MARKET_CREATION_FEE = minMarketCreationFee;
         MAX_MARKET_CREATION_FEE = maxMarketCreationFee;
         MARKET_CREATION_FEE_RECIPIENT = marketCreationFeeRecipient;
@@ -95,11 +112,11 @@ contract DelphiFactory is IDelphiFactory {
         // Interactions: Initialize new market proxy
         IDelphiMarket(newMarketProxy)
             .initialize({
-                marketCreator_: msg.sender,
-                initialDeposit_: initialDeposit_,
-                newMarketMetadata_: newMarketMetadata_,
-                initializationCalldata_: newMarketInitializationCalldata_
-            });
+            marketCreator_: msg.sender,
+            initialDeposit_: initialDeposit_,
+            newMarketMetadata_: newMarketMetadata_,
+            initializationCalldata_: newMarketInitializationCalldata_
+        });
 
         // Effects: Save new market proxy
         _marketProxies.add(newMarketProxy);
@@ -107,10 +124,18 @@ contract DelphiFactory is IDelphiFactory {
         // Effects: Emit event
         emit NewMarketProxy(msg.sender, IMPLEMENTATION, newMarketProxy, newMarketMetadata_);
 
-        // If there is a market creation fee
+        // Distribute market creation fee
         if (MARKET_CREATION_FEE > 0) {
-            // Interactions: Charge marketCreationFee
-            TOKEN.safeTransferFrom(msg.sender, MARKET_CREATION_FEE_RECIPIENT, MARKET_CREATION_FEE);
+            // Forward settlement fees to the market proxy
+            if (SETTLEMENT_FEES > 0) {
+                TOKEN.safeTransferFrom(msg.sender, newMarketProxy, SETTLEMENT_FEES);
+            }
+
+            // Forward the remainder to the market creation fee recipient
+            uint256 recipientFee = MARKET_CREATION_FEE - SETTLEMENT_FEES;
+            if (recipientFee > 0) {
+                TOKEN.safeTransferFrom(msg.sender, MARKET_CREATION_FEE_RECIPIENT, recipientFee);
+            }
         }
     }
 

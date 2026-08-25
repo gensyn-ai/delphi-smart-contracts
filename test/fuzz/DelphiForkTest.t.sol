@@ -20,6 +20,7 @@ import {
 import {DynamicParimutuelGateway} from "src/delphi/dynamicParimutuel/gateway/DynamicParimutuelGateway.sol";
 import {DynamicParimutuelMarket} from "src/delphi/dynamicParimutuel/implementation/DynamicParimutuelMarket.sol";
 import {DelphiFactory} from "src/delphi/factory/DelphiFactory.sol";
+import {MockOracleRelayer} from "test/mocks/MockOracleRelayer.sol";
 
 interface IUsdc {
     function owner() external view returns (address);
@@ -37,6 +38,7 @@ contract DelphiFork_Test is DelphiDeployer, DelphiTestUtils {
     DynamicParimutuelGateway gateway;
     DynamicParimutuelMarket implementation;
     DelphiFactory factory;
+    MockOracleRelayer mockOracleRelayer;
 
     // Other
     // forge-lint: disable-next-line(unsafe-cheatcode)
@@ -151,10 +153,9 @@ contract DelphiFork_Test is DelphiDeployer, DelphiTestUtils {
                     // Warp past trading deadline
                     vm.warp(tradingDeadline + 1);
 
-                    // Submit Winner
-                    gateway.submitWinner({
-                        marketProxy: IDynamicParimutuelMarket(newMarketProxy), winningOutcomeIdx: outcomeIdx
-                    });
+                    // Settle market via mock oracle relayer
+                    mockOracleRelayer.setOutcome(newMarketProxy, outcomeIdx);
+                    gateway.resolveMarket(newMarketProxy);
 
                     // Redeem
                     gateway.redeem({marketProxy: IDynamicParimutuelMarket(newMarketProxy)});
@@ -207,8 +208,11 @@ contract DelphiFork_Test is DelphiDeployer, DelphiTestUtils {
                 tradingFeesRecipient: ADMIN,
                 marketCreationFeeRecipient: ADMIN,
                 marketCreationFee: marketCreationFee,
+                keeperFee: 0,
+                oracleFee: 0,
                 tradingFeesRecipientPct: bound(args.tradingFeesRecipient, 0, 1e18),
-                token: token
+                token: token,
+                gatewayOwner: address(this)
             })
         });
 
@@ -216,6 +220,10 @@ contract DelphiFork_Test is DelphiDeployer, DelphiTestUtils {
         gateway = delphiAddresses.dynamicParimutuelGateway;
         implementation = delphiAddresses.dynamicParimutuelImplementation;
         factory = delphiAddresses.delphiFactory;
+
+        // Deploy mock oracle relayer and register it on the gateway
+        mockOracleRelayer = new MockOracleRelayer(gateway);
+        gateway.setOracleRelayer(address(mockOracleRelayer));
     }
 
     function _deployMarket(IERC20Metadata token, Args calldata args, uint256 marketCreationFee)

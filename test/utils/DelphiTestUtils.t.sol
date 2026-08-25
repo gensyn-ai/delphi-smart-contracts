@@ -16,7 +16,7 @@ import {
 import {
     IDynamicParimutuelMarketErrors
 } from "src/delphi/dynamicParimutuel/implementation/IDynamicParimutuelMarketErrors.sol";
-import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import {IERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
 import {IEndToEndHandler} from "../invariant/handlers/IEndToEndHandler.sol";
 import {IDelphiMarket} from "src/delphi/IDelphiMarket.sol";
 
@@ -33,6 +33,24 @@ contract DelphiTestUtils is BaseTest {
     using DynamicParimutuelMath for uint256;
     using EnumerableSet for EnumerableSet.AddressSet;
     using EnumerableSet for EnumerableSet.UintSet;
+
+    // Structs
+
+    struct AssertionHelperInfo {
+        uint256 k;
+        uint256 price;
+        uint256 tokenDecimals;
+    }
+
+    struct BuyWithPermitVars {
+        AssertionHelperInfo info;
+        address buyer;
+        uint256 boundedMaxTokensIn;
+        uint256 deadline;
+        uint8 v;
+        bytes32 r;
+        bytes32 s;
+    }
 
     // Constants
     uint256 public constant BASIS_POINT = 0.000_1e18; // 0.01%
@@ -166,12 +184,6 @@ contract DelphiTestUtils is BaseTest {
         }
     }
 
-    struct AssertionHelperInfo {
-        uint256 k;
-        uint256 price;
-        uint256 tokenDecimals;
-    }
-
     function _buyAssertionHelper(IDynamicParimutuelMarket marketProxy, uint256 sharesOut, uint256 tokensIn)
         private
         view
@@ -242,7 +254,7 @@ contract DelphiTestUtils is BaseTest {
         );
     }
 
-    function _buy(
+    function _buyWithApproval(
         address buyer,
         IDynamicParimutuelGateway marketGateway,
         IDynamicParimutuelMarket marketProxy,
@@ -272,21 +284,19 @@ contract DelphiTestUtils is BaseTest {
         _assertPriceLessThanK(info);
         _assertPriceGreaterThanSpot(info, marketProxy.spotPrice(outcomeIdx));
 
-        IERC20Metadata gensynTokenProxy = marketGateway.TOKEN();
+        {
+            // Get buyer tokens
+            uint256 buyerTokens = marketGateway.TOKEN().balanceOf(buyer);
 
-        // Get buyer tokens
-        uint256 buyerTokens = gensynTokenProxy.balanceOf(buyer);
-
-        // If buyer has insufficient tokens, deal
-        if (buyerTokens < tokensIn) {
-            deal(address(gensynTokenProxy), buyer, tokensIn);
+            // If buyer has insufficient tokens, deal
+            if (buyerTokens < tokensIn) {
+                deal(address(marketGateway.TOKEN()), buyer, tokensIn);
+            }
         }
 
-        // Switch to buyer
-        _useNewSender(buyer);
-
         // Approve tokens in
-        gensynTokenProxy.approve(address(marketProxy), tokensIn);
+        _useNewSender(buyer);
+        marketGateway.TOKEN().approve(address(marketProxy), tokensIn);
 
         // Buy
         marketGateway.buyExactOut({
@@ -297,6 +307,83 @@ contract DelphiTestUtils is BaseTest {
         });
 
         _assertPriceLessThanSpot(info, marketProxy.spotPrice(outcomeIdx));
+
+        return (true, 0, tokensIn);
+    }
+
+    function _buyWithPermit(
+        uint256 buyerPk,
+        IDynamicParimutuelGateway marketGateway,
+        IDynamicParimutuelMarket marketProxy,
+        uint256 outcomeIdx,
+        uint256 sharesOut,
+        uint256 maxTokensIn
+    )
+        internal
+        returns (
+            bool, /*success*/
+            bytes4, /*errSelector*/
+            uint256 /*tokensIn*/
+        )
+    {
+        uint256 freeMemPtr = _getFreeMemPtr();
+
+        BuyWithPermitVars memory vars;
+
+        uint256 tokensIn;
+        {
+            // Get tokens in
+            (bool success, bytes4 errSelector, uint256 _tokensIn) =
+                _quoteBuyExactOut(marketGateway, marketProxy, outcomeIdx, sharesOut);
+            if (!success) {
+                return (false, errSelector, 0);
+            }
+            tokensIn = _tokensIn;
+        }
+
+        vars.info = _buyAssertionHelper(marketProxy, sharesOut, tokensIn);
+        _assertPriceLessThanK(vars.info);
+        _assertPriceGreaterThanSpot(vars.info, marketProxy.spotPrice(outcomeIdx));
+
+        vars.buyer = vm.addr(buyerPk);
+
+        {
+            // Get buyer tokens
+            uint256 buyerTokens = marketGateway.TOKEN().balanceOf(vars.buyer);
+
+            // If buyer has insufficient tokens, deal
+            if (buyerTokens < tokensIn) {
+                deal(address(marketGateway.TOKEN()), vars.buyer, tokensIn);
+            }
+        }
+
+        // Switch to buyer
+        _useNewSender(vars.buyer);
+
+        vars.deadline = block.timestamp;
+        vars.boundedMaxTokensIn = bound(maxTokensIn, tokensIn, type(uint256).max);
+        (vars.v, vars.r, vars.s) = _signPermit({
+            marketProxy: marketProxy,
+            buyerPk: buyerPk,
+            boundedMaxTokensIn: vars.boundedMaxTokensIn,
+            deadline: vars.deadline
+        });
+
+        marketGateway.buyExactOutWithPermit({
+            marketProxy: marketProxy,
+            outcomeIdx: outcomeIdx,
+            sharesOut: sharesOut,
+            maxTokensIn: vars.boundedMaxTokensIn,
+            deadline: vars.deadline,
+            v: vars.v,
+            r: vars.r,
+            s: vars.s
+        });
+
+        _assertPriceLessThanSpot(vars.info, marketProxy.spotPrice(outcomeIdx));
+
+        // Move free memory pointer back (to free everything in this function from memory)
+        _setFreeMemPtr(freeMemPtr);
 
         return (true, 0, tokensIn);
     }
@@ -379,5 +466,43 @@ contract DelphiTestUtils is BaseTest {
     function _adjustDown(uint256 value, uint256 adjustment) internal pure returns (uint256) {
         require(adjustment <= ONE, "_adjustDown underflow");
         return value.mulDiv(ONE - adjustment, ONE);
+    }
+
+    function _signPermit(
+        IDynamicParimutuelMarket marketProxy,
+        uint256 buyerPk,
+        uint256 boundedMaxTokensIn,
+        uint256 deadline
+    ) internal view returns (uint8 v, bytes32 r, bytes32 s) {
+        IERC20Permit token = IERC20Permit(address(marketProxy.TOKEN()));
+        address buyer = vm.addr(buyerPk);
+        uint256 nonce = token.nonces(buyer);
+
+        bytes32 permitStructHash = keccak256(
+            abi.encode(
+                keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)"),
+                buyer,
+                address(marketProxy),
+                boundedMaxTokensIn,
+                nonce,
+                deadline
+            )
+        );
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", token.DOMAIN_SEPARATOR(), permitStructHash));
+        (v, r, s) = vm.sign(buyerPk, digest);
+    }
+
+    // EVM mem utils
+
+    function _getFreeMemPtr() private pure returns (uint256 ptr) {
+        assembly ("memory-safe") {
+            ptr := mload(0x40)
+        }
+    }
+
+    function _setFreeMemPtr(uint256 ptr) private pure {
+        assembly ("memory-safe") {
+            mstore(0x40, ptr)
+        }
     }
 }
