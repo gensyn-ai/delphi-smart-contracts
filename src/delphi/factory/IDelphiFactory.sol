@@ -33,6 +33,7 @@ interface IDelphiFactory is IDelphiFactoryErrors {
     function IMPLEMENTATION() external view returns (address);
     function TOKEN() external view returns (IERC20Metadata);
     function MARKET_CREATION_FEE() external view returns (uint256);
+    function SETTLEMENT_FEES() external view returns (uint256);
     function MIN_MARKET_CREATION_FEE() external view returns (uint256);
     function MAX_MARKET_CREATION_FEE() external view returns (uint256);
     function MARKET_CREATION_FEE_RECIPIENT() external view returns (address);

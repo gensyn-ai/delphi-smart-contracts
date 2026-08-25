@@ -19,6 +19,7 @@ import {
 } from "src/delphi/dynamicParimutuel/implementation/IDynamicParimutuelMarketTypes.sol";
 import {DelphiFactory} from "src/delphi/factory/DelphiFactory.sol";
 import {MockToken} from "src/mock/MockToken.sol";
+import {MockOracleRelayer} from "test/mocks/MockOracleRelayer.sol";
 
 // Interfaces
 import {IDynamicParimutuelMarket} from "src/delphi/dynamicParimutuel/implementation/IDynamicParimutuelMarket.sol";
@@ -59,6 +60,7 @@ contract EndToEndHandler is IEndToEndHandler, DelphiDeployer, DelphiTestUtils {
     DynamicParimutuelMarket public override dynamicParimutuelImplementation;
     DelphiFactory public override delphiFactory;
     IDynamicParimutuelMarket public override marketProxy;
+    MockOracleRelayer public mockOracleRelayer;
 
     // Market Info
     uint256 tradeCount;
@@ -135,8 +137,8 @@ contract EndToEndHandler is IEndToEndHandler, DelphiDeployer, DelphiTestUtils {
 
                 // If market is AWAITING_SETTLEMENT
             } else if (marketStatus == IDynamicParimutuelMarketTypes.MarketStatus.AWAITING_SETTLEMENT) {
-                // SUBMIT_WINNER is possible
-                possibleActions.push(Action.SUBMIT_WINNER);
+                // RESOLVE_MARKET is possible
+                possibleActions.push(Action.RESOLVE_MARKET);
 
                 // If market is SETTLED
             } else if (marketStatus == IDynamicParimutuelMarketTypes.MarketStatus.SETTLED) {
@@ -180,9 +182,9 @@ contract EndToEndHandler is IEndToEndHandler, DelphiDeployer, DelphiTestUtils {
         } else if (action == Action.SKIP_TIME) {
             console2.log("Skipping time");
             _skipTime(args.skipTime);
-        } else if (action == Action.SUBMIT_WINNER) {
-            console2.log("Submitting winner");
-            _submitWinner();
+        } else if (action == Action.RESOLVE_MARKET) {
+            console2.log("Resolving market");
+            _resolveMarket();
         } else if (action == Action.REDEEM) {
             console2.log("Redeeming");
             _redeem();
@@ -203,7 +205,13 @@ contract EndToEndHandler is IEndToEndHandler, DelphiDeployer, DelphiTestUtils {
 
     function _deployFactory(DeployFactoryArgs calldata args) internal {
         // Deploy Token
-        token = new MockToken({_decimals: _boundUint8(args.decimals, 6, 18), admin: TOKEN_ADMIN, initialAmount: 0});
+        token = new MockToken({
+            name: "MockToken",
+            symbol: "MOCK",
+            _decimals: _boundUint8(args.decimals, 6, 18),
+            admin: TOKEN_ADMIN,
+            initialAmount: 0
+        });
 
         // Set vars
         tokenDecimals = token.decimals();
@@ -217,10 +225,13 @@ contract EndToEndHandler is IEndToEndHandler, DelphiDeployer, DelphiTestUtils {
                 tradingFeesRecipient: TRADING_FEES_RECIPIENT,
                 marketCreationFeeRecipient: MARKET_CREATION_FEE_RECIPIENT,
                 marketCreationFee: bound(args.marketCreationFee, _minMarketCreationFee, _maxMarketCreationFee),
+                keeperFee: 0,
+                oracleFee: 0,
                 tradingFeesRecipientPct: bound(
                     args.tradingFeesRecipientPct, _MIN_TRADING_FEES_RECIPIENT_PCT, _MAX_TRADING_FEES_RECIPIENT_PCT
                 ),
-                token: token
+                token: token,
+                gatewayOwner: address(this)
             })
         );
 
@@ -228,6 +239,12 @@ contract EndToEndHandler is IEndToEndHandler, DelphiDeployer, DelphiTestUtils {
         dynamicParimutuelGateway = delphiAddresses.dynamicParimutuelGateway;
         dynamicParimutuelImplementation = delphiAddresses.dynamicParimutuelImplementation;
         delphiFactory = delphiAddresses.delphiFactory;
+
+        // Deploy mock oracle relayer and register it on the gateway.
+        // vm.stopPrank() clears any active prank so msg.sender == address(this) == gateway owner.
+        mockOracleRelayer = new MockOracleRelayer(dynamicParimutuelGateway);
+        vm.stopPrank();
+        dynamicParimutuelGateway.setOracleRelayer(address(mockOracleRelayer));
 
         // Set remaining vars
         _minSharesDelta = dynamicParimutuelGateway.MIN_SHARES_DELTA();
@@ -306,17 +323,32 @@ contract EndToEndHandler is IEndToEndHandler, DelphiDeployer, DelphiTestUtils {
 
         // Bound buyer
         // Note: This avoids address(0), without the need for a vm.assume (which reduces coverage)
-        address buyer = _randomAddressFromPk(args.buyerPkSeed, 1, MAX_TRADER_COUNT);
+        uint256 buyerPk = _randomPk(args.buyerPkSeed, 1, MAX_TRADER_COUNT);
+        address buyer = vm.addr(buyerPk);
 
-        // Buy
-        (bool success, bytes4 errSelector,) = _buy({
-            buyer: buyer,
-            marketGateway: dynamicParimutuelGateway,
-            marketProxy: marketProxy,
-            outcomeIdx: outcomeIdx,
-            sharesOut: sharesOut,
-            maxTokensIn: args.maxTokensIn
-        });
+        BuyType buyType = BuyType(_boundUint8(args.buyTypeSeed, 0, uint8(type(BuyType).max)));
+
+        bool success;
+        bytes4 errSelector;
+        if (buyType == BuyType.BUY_WITH_APPROVAL) {
+            (success, errSelector,) = _buyWithApproval({
+                buyer: buyer,
+                marketGateway: dynamicParimutuelGateway,
+                marketProxy: marketProxy,
+                outcomeIdx: outcomeIdx,
+                sharesOut: sharesOut,
+                maxTokensIn: args.maxTokensIn
+            });
+        } else {
+            (success, errSelector,) = _buyWithPermit({
+                buyerPk: buyerPk,
+                marketGateway: dynamicParimutuelGateway,
+                marketProxy: marketProxy,
+                outcomeIdx: outcomeIdx,
+                sharesOut: sharesOut,
+                maxTokensIn: args.maxTokensIn
+            });
+        }
 
         if (!success) {
             _saveReturn(errSelector);
@@ -406,7 +438,7 @@ contract EndToEndHandler is IEndToEndHandler, DelphiDeployer, DelphiTestUtils {
 
     function _skipTime(SkipTimeArgs calldata args) internal {
         // Pick random skip action (SKIP_TO_SETTLE or SKIP_TO_EXPIRE)
-        SkipTimeAction action = SkipTimeAction(_boundUint8(args.action, 0, 1));
+        SkipTimeAction action = SkipTimeAction(_boundUint8(args.action, 0, uint8(type(SkipTimeAction).max)));
 
         // Initialize destination timestamp
         uint256 destinationTimestamp;
@@ -431,15 +463,13 @@ contract EndToEndHandler is IEndToEndHandler, DelphiDeployer, DelphiTestUtils {
         vm.warp(destinationTimestamp);
     }
 
-    function _submitWinner() internal {
-        // Switch to market creator
-        _useNewSender(marketProxy.marketCreator());
-
+    function _resolveMarket() internal {
         uint256 tokenPool = marketProxy.getMarket().pool;
         tokenRewardPerShare = tokenPool.mulDiv(1e18, marketProxy.totalSupply(winningOutcomeIdx));
 
-        // Submit winner (via safe)
-        dynamicParimutuelGateway.submitWinner(marketProxy, winningOutcomeIdx);
+        // Set outcome on mock oracle, then trigger resolution (resolveMarket → oracle callback → settleMarket)
+        mockOracleRelayer.setOutcome(address(marketProxy), winningOutcomeIdx);
+        dynamicParimutuelGateway.resolveMarket(address(marketProxy));
     }
 
     function _redeem() internal {
@@ -632,6 +662,13 @@ contract EndToEndHandler is IEndToEndHandler, DelphiDeployer, DelphiTestUtils {
                     "_liquidate: total tokens out not equal for liquidators with equal shares"
                 );
             }
+        }
+
+        // Liquidate the creator's market-creation shares too. This is decoupled from the trader liquidate()
+        // path (it is no longer auto-called), so the market only fully drains once it is invoked explicitly.
+        // Order-independent, so it is fine to call it after the trader liquidations.
+        if (!marketProxy.marketCreationSharesLiquidated()) {
+            dynamicParimutuelGateway.liquidateMarketCreationShares(marketProxy);
         }
 
         // Ensure market is empty after all liquidations

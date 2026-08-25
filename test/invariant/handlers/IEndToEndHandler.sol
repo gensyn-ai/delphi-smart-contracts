@@ -21,7 +21,7 @@ interface IEndToEndHandler {
         BUY_EXACT_OUT,
         SELL_EXACT_IN,
         SKIP_TIME,
-        SUBMIT_WINNER,
+        RESOLVE_MARKET,
         REDEEM,
         LIQUIDATE
     }
@@ -55,6 +55,7 @@ interface IEndToEndHandler {
     }
 
     struct BuyExactOutArgs {
+        uint8 buyTypeSeed;
         uint256 buyerPkSeed;
         uint256 outcomeIdx;
         uint256 sharesOut;
@@ -66,6 +67,11 @@ interface IEndToEndHandler {
         uint256 outcomeIdx;
         uint256 sharesIn;
         uint256 minTokensOut;
+    }
+
+    enum BuyType {
+        BUY_WITH_APPROVAL,
+        BUY_WITH_PERMIT
     }
 
     enum SkipTimeAction {

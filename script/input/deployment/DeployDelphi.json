@@ -2,6 +2,8 @@
     "token": {
         "address": "0x0000000000000000000000000000000000000000",
         "config": {
+            "name": "",
+            "symbol": "",
             "admin": "0x0000000000000000000000000000000000000000",
             "initialAmount": 0
         }
@@ -12,6 +14,11 @@
     },
     "factory": {
         "marketCreationFeeRecipient": "0x0000000000000000000000000000000000000000",
-        "marketCreationFee": 0
+        "marketCreationFee": 0,
+        "keeperFee": 0,
+        "oracleFee": 0
+    },
+    "gateway": {
+        "owner": "0x0000000000000000000000000000000000000000"
     }
 }

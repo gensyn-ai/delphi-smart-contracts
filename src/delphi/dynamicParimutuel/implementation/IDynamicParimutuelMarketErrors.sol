@@ -41,6 +41,11 @@ interface IDynamicParimutuelMarketErrors is IDynamicParimutuelMarketTypes, IDyna
     error ZeroTokenAddress();
     error ZeroTradingFeesRecipientAddress();
     error GrossTokensOutExceedMarketPool(uint256 grossTokensOut, uint256 marketPool);
-    error CallerNotMarketCreator(address caller, address marketCreator);
     error MarketCreationSharesAlreadyLiquidated();
+    /// @dev Thrown when liquidation is attempted on a market that is neither EXPIRED nor FAILED.
+    error MarketNotLiquidatable(MarketStatus current);
+    /// @dev Thrown on market initialization when the gateway has no oracle relayer wired. Without this
+    ///      guard a market could be created that can never be resolved (only expire).
+    ///      Named distinctly from the gateway's own `OracleRelayerNotSet` (both are aggregated in IErrors).
+    error GatewayOracleRelayerNotSet();
 }

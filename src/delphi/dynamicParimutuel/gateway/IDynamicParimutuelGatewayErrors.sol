@@ -19,4 +19,10 @@ interface IDynamicParimutuelGatewayErrors is IDynamicParimutuelMathErrors {
     error DelphiFactoryIsNotContract(address delphiFactory);
     error GatewayNotInitialized();
     error MarketProxyNotDeployedByFactory(address marketProxy);
+    error NotOracleRelayer(address caller);
+    error OracleRelayerNotSet();
+    error SettlementAlreadyLocked(address marketProxy);
+    error SettlementNotLocked(address marketProxy);
+    error ZeroOracleRelayerAddress();
+    error AllowanceTooLow(uint256 allowance, uint256 required);
 }

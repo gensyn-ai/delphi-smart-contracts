@@ -17,8 +17,11 @@ contract DelphiDeployer {
         address tradingFeesRecipient;
         address marketCreationFeeRecipient;
         uint256 marketCreationFee;
+        uint256 keeperFee;
+        uint256 oracleFee;
         uint256 tradingFeesRecipientPct;
         IERC20Metadata token;
+        address gatewayOwner;
     }
 
     struct DelphiAddresses {
@@ -34,13 +37,15 @@ contract DelphiDeployer {
         _verifyDelphiArgs(args);
 
         // Deploy DynamicParimutuel Gateway
-        DynamicParimutuelGateway dynamicParimutuelGateway = new DynamicParimutuelGateway(args.token);
+        DynamicParimutuelGateway dynamicParimutuelGateway = new DynamicParimutuelGateway(args.token, args.gatewayOwner);
 
         // Deploy DynamicParimutuel Implementation
         DynamicParimutuelMarket dynamicParimutuelImplementation = new DynamicParimutuelMarket({
             tradingFeesRecipient: args.tradingFeesRecipient,
             gateway: address(dynamicParimutuelGateway),
-            tradingFeesRecipientPct: args.tradingFeesRecipientPct
+            tradingFeesRecipientPct: args.tradingFeesRecipientPct,
+            keeperFee: args.keeperFee,
+            oracleFee: args.oracleFee
         });
 
         // Deploy DelphiFactory implementation
@@ -66,6 +71,7 @@ contract DelphiDeployer {
             args.marketCreationFeeRecipient != address(0), "Delphi | marketCreationFeeRecipient cannot be address 0"
         );
         require(address(args.token) != address(0), "Delphi | token cannot be address 0");
+        require(args.gatewayOwner != address(0), "Delphi | gatewayOwner cannot be address 0");
     }
 
     function _getDelphiConfigFromJson(string memory json) internal pure returns (DelphiConfig memory) {
@@ -74,7 +80,10 @@ contract DelphiDeployer {
             tradingFeesRecipientPct: json.readUint(".implementation.tradingFeesRecipientPct"),
             marketCreationFeeRecipient: json.readAddress(".factory.marketCreationFeeRecipient"),
             marketCreationFee: json.readUint(".factory.marketCreationFee"),
-            token: IERC20Metadata(json.readAddress(".token"))
+            keeperFee: json.readUint(".factory.keeperFee"),
+            oracleFee: json.readUint(".factory.oracleFee"),
+            token: IERC20Metadata(json.readAddress(".token")),
+            gatewayOwner: json.readAddress(".gateway.owner")
         });
     }
 }

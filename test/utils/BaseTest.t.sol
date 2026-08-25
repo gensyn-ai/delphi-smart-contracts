@@ -60,9 +60,9 @@ abstract contract BaseTest is Test {
         }
     }
 
-    function _randomAddressFromPk(uint256 pkSeed, uint256 minPk, uint256 maxPk) internal pure returns (address) {
+    function _randomPk(uint256 pkSeed, uint256 minPk, uint256 maxPk) internal pure returns (uint256) {
         require(minPk >= _MIN_PK, "minPk not >= MIN_PK");
         require(maxPk <= _MAX_PK, "maxPk not <= MAX_PK");
-        return vm.addr(bound(pkSeed, minPk, maxPk));
+        return bound(pkSeed, minPk, maxPk);
     }
 }

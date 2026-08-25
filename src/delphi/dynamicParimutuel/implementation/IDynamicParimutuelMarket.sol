@@ -33,12 +33,12 @@ interface IDynamicParimutuelMarket is
     /// @param tokensOut The amount of tokens received.
     event Sell(address indexed seller, uint256 indexed outcomeIdx, uint256 sharesIn, uint256 tokensOut);
 
-    /// @notice Emitted when the market creator submits the winning outcome.
+    /// @notice Emitted when the market is settled with the winning outcome.
     /// @param winningOutcomeIdx The index of the winning outcome.
     /// @param marketCreatorReward the reward related to the winning shares of the market creator
     /// @param refund amount of tokens refunded from initial deposit
     /// @param marketCreatorTradingFeesCut the part of the trading fees that goes to the market creator
-    event WinnerSubmitted(
+    event MarketSettled(
         uint256 winningOutcomeIdx, uint256 marketCreatorReward, uint256 refund, uint256 marketCreatorTradingFeesCut
     );
 
@@ -96,6 +96,10 @@ interface IDynamicParimutuelMarket is
     function MIN_INITIAL_DEPOSIT() external view returns (uint256);
     /// @notice The maximum initial deposit allowed when creating a market (in token decimals).
     function MAX_INITIAL_DEPOSIT() external view returns (uint256);
+    /// @notice The fixed fee paid to the keeper that triggers oracle resolution (in token decimals).
+    function KEEPER_FEE() external view returns (uint256);
+    /// @notice The fixed fee reserved for the oracle network, consumed at settlement (in token decimals).
+    function ORACLE_FEE() external view returns (uint256);
 
     // ===== INITIALIZATION IMMUTABLES =====
 
@@ -103,6 +107,16 @@ interface IDynamicParimutuelMarket is
     function marketCreator() external view returns (address);
 
     // ===== EXTERNAL MUTATING FUNCTIONS =====
+
+    /// @notice Transfers the keeper fee to the keeper. Only callable by the gateway.
+    /// @dev Called before the oracle request is submitted so the transaction reverts early (before any
+    ///      oracle-side effects) if the market is not in AWAITING_SETTLEMENT status.
+    /// @param keeper The address to receive the keeper fee.
+    function transferKeeperFee(address keeper) external;
+
+    /// @notice Transitions the market to FAILED status. Only callable by the gateway.
+    /// @dev Only valid when market is in AWAITING_SETTLEMENT status.
+    function failMarket() external;
 
     /// @notice Executes a buy of outcome shares. Only callable by the gateway.
     /// @param buyer The address buying shares.
@@ -118,10 +132,11 @@ interface IDynamicParimutuelMarket is
     /// @param tokensOut The tokens to receive (after fees).
     function sell(address seller, uint256 outcomeIdx, uint256 sharesIn, uint256 tokensOut) external;
 
-    /// @notice Submits the winning outcome and distributes fees and creator rewards. Only callable by the gateway.
-    /// @param caller The address submitting the winner (must be the market creator).
+    /// @notice Settles the market with the winning outcome, distributes fees and creator rewards, and
+    ///         transfers the oracle fee to the recipient. Only callable by the gateway.
     /// @param winningOutcomeIdx The index of the winning outcome.
-    function submitWinner(address caller, uint256 winningOutcomeIdx)
+    /// @param oracleFeeRecipient The address to receive the oracle fee (e.g. oracle treasury). Pass-through.
+    function settleMarket(uint256 winningOutcomeIdx, address oracleFeeRecipient)
         external
         returns (uint256 marketCreatorReward, uint256 refund, uint256 marketCreatorTradingFeesCut);
 
@@ -150,6 +165,9 @@ interface IDynamicParimutuelMarket is
 
     /// @return market The full market struct including configuration and state.
     function getMarket() external view returns (Market memory market);
+
+    /// @return True if `outcomeIdx` is within the configured outcome range, false otherwise.
+    function isValidOutcomeIdx(uint256 outcomeIdx) external view returns (bool);
 
     /// @return The current lifecycle status of the market.
     function marketStatus() external view returns (MarketStatus);
@@ -208,6 +226,15 @@ interface IDynamicParimutuelMarket is
 
     /// @return Whether the market creator's initial shares have been liquidated.
     function marketCreationSharesLiquidated() external view returns (bool);
+
+    /// @return Whether the market has been explicitly failed by the oracle relayer.
+    function marketFailed() external view returns (bool);
+
+    /// @return The Unix timestamp when this market was created.
+    function createdAt() external view returns (uint256);
+
+    /// @return Whether the keeper fee has been disbursed (set when resolveMarket triggers transferKeeperFee).
+    function keeperFeePaid() external view returns (bool);
 
     /// @notice Calculates the token value of the market creator's initial shares if a specific outcome wins.
     /// @dev This value represents the market creator's reward if they successfully submit the `winningOutcomeIdx`

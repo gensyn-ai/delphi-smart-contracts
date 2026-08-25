@@ -10,6 +10,8 @@ import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IER
 contract MockTokenDeployer {
     // Types
     struct MockTokenConfig {
+        string name;
+        string symbol;
         uint8 decimals;
         address admin;
         uint256 initialSupply;
@@ -19,7 +21,7 @@ contract MockTokenDeployer {
         // Validate args
         _validateMockTokenArgs(config);
 
-        return new MockToken(config.decimals, config.admin, config.initialSupply);
+        return new MockToken(config.name, config.symbol, config.decimals, config.admin, config.initialSupply);
     }
 
     function _validateMockTokenArgs(MockTokenConfig memory config) private pure {
