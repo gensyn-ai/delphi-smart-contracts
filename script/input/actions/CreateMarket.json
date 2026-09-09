@@ -7,9 +7,10 @@
     },
     "newMarketConfig": {
         "outcomeCount": 0,
-        "k": 0,
+        "b": 0,
         "tradingFee": 0,
         "tradingDeadline": 0,
+        "earliestResolveTime": 0,
         "settlementDeadline": 0
     }
 }

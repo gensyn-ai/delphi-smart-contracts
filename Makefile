@@ -3,34 +3,26 @@
 # ==========================================
 
 .PHONY: deploy-delphi \
-        deploy-faucet \
+        deploy-truebit-oracle-relayer \
+        deploy-timelock \
         create-market \
-        run-safe-signing-ui \
-        safe-exec-transaction \
-        safe-remove-owner \
         get-block-timestamp \
-        deploy-safe
+        run-tests-with-coverage
 
 # Targets that hit a live RPC / need a signer (interactive)
 ONCHAIN_TARGETS := deploy-delphi \
-                  deploy-faucet \
+                  deploy-truebit-oracle-relayer \
+                  deploy-timelock \
                   create-market \
-                  safe-exec-transaction \
-                  safe-remove-owner \
-                  get-safe-remove-owner-calldata \
-                  get-block-timestamp \
-                  deploy-safe
+                  get-block-timestamp
 
 # Targets where we want to force an explicit verification decision when broadcasting
 VERIFY_REQUIRED_TARGETS := deploy-delphi \
-                           deploy-faucet \
-                           deploy-safe
+                           deploy-truebit-oracle-relayer \
+                           deploy-timelock
 
 # Targets where verification should never be used
-VERIFY_DISALLOWED_TARGETS := create-market \
-                             safe-exec-transaction  \
-                             get-safe-remove-owner-calldata  \
-                             safe-remove-owner
+VERIFY_DISALLOWED_TARGETS := create-market
 
 # If any selected goal is an onchain target, require NETWORK and enable signer prompting
 ifneq ($(filter $(MAKECMDGOALS),$(ONCHAIN_TARGETS)),)
@@ -101,7 +93,7 @@ ifneq ($(filter $(MAKECMDGOALS),$(ONCHAIN_TARGETS)),)
     endif
   endif
 
-  # ===== DISALLOW VERIFY on safe-create-market / safe-submit-winner =====
+  # ===== DISALLOW VERIFY on create-market =====
   # (unless you're also running a verify-required target in the same invocation)
   ifneq ($(filter $(MAKECMDGOALS),$(VERIFY_DISALLOWED_TARGETS)),)
     ifdef VERIFY
@@ -130,17 +122,17 @@ deploy-delphi:
 		$(BROADCAST_FLAG) \
 		$(VERIFY_FLAG)
 
-# ===== Deploy Faucet =====
-deploy-faucet:
-	forge script script/scripts/deployment/DeployFaucet.s.sol \
+# ===== Deploy Truebit Oracle Relayer =====
+deploy-truebit-oracle-relayer:
+	forge script script/scripts/deployment/DeployTruebitOracleRelayer.s.sol \
 		$(RPC_FLAG) \
 		$(SIGNER_FLAG) \
 		$(BROADCAST_FLAG) \
 		$(VERIFY_FLAG)
 
-# ===== Deploy Safe =====
-deploy-safe:
-	forge script script/scripts/deployment/DeploySafe.s.sol \
+# ===== Deploy Timelock =====
+deploy-timelock:
+	forge script script/scripts/deployment/DeployTimelock.s.sol \
 		$(RPC_FLAG) \
 		$(SIGNER_FLAG) \
 		$(BROADCAST_FLAG) \
@@ -157,35 +149,25 @@ create-market:
 		$(SIGNER_FLAG) \
 		$(BROADCAST_FLAG)
 
-# ===== Safe UI =====
-run-safe-signing-ui:
-	@echo "\nSAFE SIGNING UI: http://localhost:8000/safe-signing-ui.html\n"
-	cd eip712-ui && python3 -m http.server 8000
-
-# ===== Safe Exec Transaction =====
-safe-exec-transaction:
-	forge script script/scripts/actions/SafeTransaction.s.sol \
-		--sig "execTransaction()" \
-		$(RPC_FLAG) \
-		$(SIGNER_FLAG) \
-		$(BROADCAST_FLAG) \
-		$(VERIFY_FLAG)
-
-# ===== Safe Remove Owner =====
-get-safe-remove-owner-calldata:
-	forge script script/scripts/actions/SafeRemoveOwner.s.sol \
-		--sig "generateRemoveOwnerCalldata" \
-		$(RPC_FLAG)
-
-safe-remove-owner:
-	forge script script/scripts/actions/SafeRemoveOwner.s.sol \
-		--sig "safeBuildJointSigAndRemoveOwner" \
-		$(RPC_FLAG) \
-		$(SIGNER_FLAG) \
-		$(BROADCAST_FLAG)
-
 # ===== Coverage =====
 
+# The invariant suite is the memory-heavy long pole under coverage instrumentation
+# (optimizer + viaIR are disabled for accurate coverage), so running it alongside the
+# fuzz suites OOM-kills the process. We shard the run: unit/fuzz tests in parallel, the
+# invariant suite fully serialized on its own, then merge both tracefiles into a single
+# unified lcov.info before generating the HTML report.
+COVERAGE_INVARIANT_GLOB := test/invariant/**
+# The fork suite requires a live RPC + ALCHEMY_API_KEY (see AGENTS.md); exclude it from
+# the local coverage run so a missing key / offline network doesn't abort the shards.
+COVERAGE_UNIT_EXCLUDE_GLOB := test/{invariant,fork}/**
+
+run-tests-with-coverage: export FOUNDRY_PROFILE=coverage
 run-tests-with-coverage:
-	forge coverage --report lcov
+	forge coverage --report lcov --report-file lcov-unit.info \
+		--no-match-path '$(COVERAGE_UNIT_EXCLUDE_GLOB)' --threads 4
+	forge coverage --report lcov --report-file lcov-invariant.info \
+		--match-path '$(COVERAGE_INVARIANT_GLOB)' --threads 1
+	lcov --add-tracefile lcov-unit.info \
+		--add-tracefile lcov-invariant.info \
+		--output-file lcov.info
 	genhtml lcov.info --output-directory coverage

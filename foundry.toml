@@ -11,7 +11,7 @@ fs_permissions = [
 ]
 
 # Optimizer settings
-viaIR = false
+via_ir = false
 optimizer = true
 optimizer_runs = 200
 
@@ -25,6 +25,20 @@ depth = 1000
 fail_on_revert = true
 show_metrics = true
 shrink_run_limit=200
+corpus_dir = "corpus/invariants"
+
+# Lighter profile used only by `make run-tests-with-coverage`. Coverage disables the
+# optimizer + viaIR (much larger bytecode) and instruments every EVM step, so the full
+# 10k-fuzz / 25x1000-depth-invariant campaigns blow past available memory and get
+# SIGKILL'd. Line/branch coverage saturates far below those counts, so we trade fuzz
+# depth for a run that actually completes. Profiles inherit from [profile.default].
+[profile.coverage.fuzz]
+runs = 256
+
+[profile.coverage.invariant]
+runs = 10
+depth = 200
+fail_on_revert = true
 corpus_dir = "corpus/invariants"
 
 [rpc_endpoints]

@@ -3,92 +3,78 @@ pragma solidity 0.8.30;
 
 // Inheritance
 import {IEndToEndHandler} from "./IEndToEndHandler.sol";
-import {DelphiDeployer} from "script/utils/deployer/DelphiDeployer.sol";
-import {DelphiTestUtils} from "test/utils/DelphiTestUtils.t.sol";
+import {DelphiTestUtils} from "test/support/utils/DelphiTestUtils.t.sol";
 
 // Libraries
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+import {LmsrMath} from "src/lmsr/math/LmsrMath.sol";
 
 // Contracts
-import {DynamicParimutuelGateway} from "src/delphi/dynamicParimutuel/gateway/DynamicParimutuelGateway.sol";
-import {DynamicParimutuelMarket} from "src/delphi/dynamicParimutuel/implementation/DynamicParimutuelMarket.sol";
-import {
-    IDynamicParimutuelMarketTypes
-} from "src/delphi/dynamicParimutuel/implementation/IDynamicParimutuelMarketTypes.sol";
-import {DelphiFactory} from "src/delphi/factory/DelphiFactory.sol";
-import {MockToken} from "src/mock/MockToken.sol";
-import {MockOracleRelayer} from "test/mocks/MockOracleRelayer.sol";
+import {LmsrGateway} from "src/lmsr/gateway/LmsrGateway.sol";
+import {LmsrMarket} from "src/lmsr/implementation/LmsrMarket.sol";
+import {ILmsrMarketTypes} from "src/lmsr/implementation/ILmsrMarketTypes.sol";
+import {DelphiFactory} from "src/factory/DelphiFactory.sol";
+import {MockToken} from "test/support/mocks/MockToken.sol";
+import {MockOracleRelayer} from "test/support/mocks/MockOracleRelayer.sol";
 
 // Interfaces
-import {IDynamicParimutuelMarket} from "src/delphi/dynamicParimutuel/implementation/IDynamicParimutuelMarket.sol";
+import {ILmsrMarket} from "src/lmsr/implementation/ILmsrMarket.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 // Log
 import {console2} from "forge-std/console2.sol";
 
-contract EndToEndHandler is IEndToEndHandler, DelphiDeployer, DelphiTestUtils {
-    // Constants
-    // Question: Move to Factory contract?
-    uint256 private constant _MIN_MARKET_CREATION_FEE_18 = 0;
-    uint256 private constant _MAX_MARKET_CREATION_FEE_18 = 100e18; // 100 tokens
-    uint256 private constant _MIN_TRADING_FEES_RECIPIENT_PCT = 0; // 0%
-    uint256 private constant _MAX_TRADING_FEES_RECIPIENT_PCT = 1e18; // 100%
-    uint256 public constant MAX_SHARES_OUT = 1_000_000e18; // 1 Millon
-
+contract EndToEndHandler is IEndToEndHandler, DelphiTestUtils {
     // Invariant Test Config
     uint256 immutable MIN_TRADES_PER_MARKET;
     uint256 immutable MAX_TRADES_PER_MARKET;
     uint256 immutable MAX_TRADER_COUNT;
-    address immutable TOKEN_ADMIN = makeAddr("TOKEN_ADMIN");
-    address immutable TRADING_FEES_RECIPIENT = makeAddr("TRADING_FEES_RECIPIENT");
-    address immutable MARKET_CREATION_FEE_RECIPIENT = makeAddr("MARKET_CREATION_FEE_RECIPIENT");
 
     // Delphi config
     uint8 public override tokenDecimals;
     uint256 internal _tokenDecimalScaler;
-    uint256 internal _minMarketCreationFee;
-    uint256 internal _maxMarketCreationFee;
     uint256 internal _minSharesDelta;
-    uint256 internal _minTokensDelta;
-    DynamicParimutuelMarket.MarketConfig internal _marketProxyConfig;
+    LmsrMarket.MarketConfig internal _marketProxyConfig;
 
     // Contracts
     IERC20Metadata public override token;
-    DynamicParimutuelGateway public override dynamicParimutuelGateway;
-    DynamicParimutuelMarket public override dynamicParimutuelImplementation;
+    LmsrGateway public override gateway;
+    LmsrMarket public override implementation;
     DelphiFactory public override delphiFactory;
-    IDynamicParimutuelMarket public override marketProxy;
-    MockOracleRelayer public mockOracleRelayer;
+    ILmsrMarket public override marketProxy;
+    MockOracleRelayer public override mockOracleRelayer;
 
     // Market Info
-    uint256 tradeCount;
+    uint256 public override tradeCount;
     uint256 winningOutcomeIdx;
 
-    EnumerableSet.UintSet internal _losingOutcomeIndicesWithExternalShares;
     mapping(uint256 outcomeIdx => EnumerableSet.AddressSet usersWithShares) internal _outcomeToUsersWithShares;
-
-    EnumerableSet.AddressSet internal _usersWithShares;
     mapping(address user => EnumerableSet.UintSet outcomesWithShares) internal _userToOutcomesWithShares;
 
-    uint256 tokenRewardPerShare;
+    EnumerableSet.UintSet internal _losingOutcomeIndicesWithExternalShares;
+    EnumerableSet.AddressSet internal _usersWithShares;
 
-    bool redeemed;
-    bool liquidated;
+    // InvariantArgs
+    uint256 invariantSeed;
+
+    uint256 tokenRewardPerShare;
 
     // Possible Actions
     Action[] possibleActions;
 
     // Return Counts
-    mapping(bytes4 => uint256) public returnCount;
+    mapping(bytes4 => uint256) public override returnCount;
 
     // Libraries
     using EnumerableSet for EnumerableSet.AddressSet;
     using EnumerableSet for EnumerableSet.UintSet;
     using SafeCast for uint256;
     using Math for uint256;
+    using LmsrMath for uint256;
 
+    // ===== CONSTRUCTOR =====
     constructor(uint256 minTradesPerMarket, uint256 maxTradesPerMarket, uint256 maxTraderCount) {
         // Validate test config
         require(minTradesPerMarket <= maxTradesPerMarket, "minTradesPerMARKET should be less than maxTradesPerMARKET");
@@ -99,10 +85,12 @@ contract EndToEndHandler is IEndToEndHandler, DelphiDeployer, DelphiTestUtils {
         MAX_TRADER_COUNT = maxTraderCount;
     }
 
-    // ===== EXTERNAL ENTRYPOINT =====
+    // ===== EXTERNAL FUNCTIONS =====
     function step(StepArgs calldata args) external {
         // Reset possible actions
         delete possibleActions;
+
+        invariantSeed = args.invariantArgs.invariantSeed;
 
         // If not deployed
         if (!deployed()) {
@@ -112,18 +100,17 @@ contract EndToEndHandler is IEndToEndHandler, DelphiDeployer, DelphiTestUtils {
             // If deployed
         } else {
             // Get market status
-            IDynamicParimutuelMarketTypes.MarketStatus marketStatus = marketProxy.marketStatus();
+            ILmsrMarketTypes.MarketStatus marketStatus = marketProxy.marketStatus();
 
             // If market is OPEN
-            if (marketStatus == IDynamicParimutuelMarketTypes.MarketStatus.OPEN) {
+            if (marketStatus == ILmsrMarketTypes.MarketStatus.OPEN) {
                 // If below max trade count
                 if (tradeCount < MAX_TRADES_PER_MARKET) {
                     // BUY_EXACT_OUT is possible
                     possibleActions.push(Action.BUY_EXACT_OUT);
 
                     // If there are losing outcomes with external shares, or the winning outcome has external shares
-                    if (_losingOutcomeIndicesWithExternalShares.length() > 0 || _externalSupply(winningOutcomeIdx) > 0)
-                    {
+                    if (_losingOutcomeIndicesWithExternalShares.length() > 0 || externalSupply(winningOutcomeIdx) > 0) {
                         // SELL_EXACT_IN is possible
                         possibleActions.push(Action.SELL_EXACT_IN);
                     }
@@ -136,27 +123,49 @@ contract EndToEndHandler is IEndToEndHandler, DelphiDeployer, DelphiTestUtils {
                 }
 
                 // If market is AWAITING_SETTLEMENT
-            } else if (marketStatus == IDynamicParimutuelMarketTypes.MarketStatus.AWAITING_SETTLEMENT) {
-                // RESOLVE_MARKET is possible
-                possibleActions.push(Action.RESOLVE_MARKET);
+            } else if (marketStatus == ILmsrMarketTypes.MarketStatus.AWAITING_SETTLEMENT) {
+                // Get settlement locked status
+                bool settlementLocked = gateway.settlementLocked(address(marketProxy));
+
+                // If settlement is not locked
+                if (!settlementLocked) {
+                    // RESOLVE_MARKET is possible
+                    possibleActions.push(Action.RESOLVE_MARKET);
+
+                    // If settlement is locked
+                } else {
+                    // SETTLE_MARKET is possible
+                    possibleActions.push(Action.SETTLE_MARKET);
+
+                    // FAIL_MARKET is possible
+                    possibleActions.push(Action.FAIL_MARKET);
+                }
 
                 // If market is SETTLED
-            } else if (marketStatus == IDynamicParimutuelMarketTypes.MarketStatus.SETTLED) {
-                // If there are users with shares of the winning outcome, and they haven't redeemed yet
-                // Question: If _redeem is redeeming everything, can't the _externalSupply view replace the redeemed bool?
-                if (_externalSupply(winningOutcomeIdx) > 0 && !redeemed) {
+            } else if (marketStatus == ILmsrMarketTypes.MarketStatus.SETTLED) {
+                // If there are at least _tokenDecimalScaler shares of the winning outcome which haven't been redeemed yet
+                if (externalSupply(winningOutcomeIdx) > _tokenDecimalScaler) {
                     // REDEEM is possible
                     possibleActions.push(Action.REDEEM);
                 }
 
-                // If market is EXPIRED
-            } else {
+                // If market is EXPIRED or FAILED
+            } else if (
+                marketStatus == ILmsrMarketTypes.MarketStatus.EXPIRED
+                    || marketStatus == ILmsrMarketTypes.MarketStatus.FAILED
+            ) {
                 // If not liquidated yet
-                // Question: If _liquidate liquidates everything, can't the _externalSupply view replace the liquidated bool?
-                if (!liquidated) {
+                if (_usersWithShares.length() > 0) {
                     // LIQUIDATE is possible
                     possibleActions.push(Action.LIQUIDATE);
                 }
+
+                // TRY_SWEEP is possible
+                possibleActions.push(Action.TRY_SWEEP);
+
+                // Else
+            } else {
+                revert("Invalid market status");
             }
         }
 
@@ -172,7 +181,7 @@ contract EndToEndHandler is IEndToEndHandler, DelphiDeployer, DelphiTestUtils {
         console2.log("Step start");
         if (action == Action.DEPLOY_FACTORY_AND_MARKET) {
             console2.log("Deploying factory and market");
-            _deployFactoryAndMarket(args.deployFactoryAndMarket);
+            _deployAll(args.deployAll);
         } else if (action == Action.BUY_EXACT_OUT) {
             console2.log("Buying exact out");
             _buyExactOut(args.buyExactOut);
@@ -185,141 +194,159 @@ contract EndToEndHandler is IEndToEndHandler, DelphiDeployer, DelphiTestUtils {
         } else if (action == Action.RESOLVE_MARKET) {
             console2.log("Resolving market");
             _resolveMarket();
+        } else if (action == Action.SETTLE_MARKET) {
+            console2.log("Settling market");
+            _settleMarket();
+        } else if (action == Action.FAIL_MARKET) {
+            console2.log("Failing market");
+            _failMarket();
         } else if (action == Action.REDEEM) {
             console2.log("Redeeming");
-            _redeem();
+            _redeem(args.redeem);
         } else if (action == Action.LIQUIDATE) {
             console2.log("Liquidating");
             _liquidate(args.liquidate);
+        } else if (action == Action.TRY_SWEEP) {
+            console2.log("Trying sweep");
+            _trySweep();
         } else {
             revert("Invalid action");
         }
         console2.log("Step end");
     }
 
-    function _deployFactoryAndMarket(DeployFactoryAndMarketArgs calldata args) internal {
-        _deployFactory(args.factory);
-        _deployMarket(args.market);
-        _minTokensDelta = dynamicParimutuelGateway.MIN_TOKENS_DELTA();
+    function consumeInvariantSeed() external returns (uint256) {
+        // Advance the seed by hashing it, so consecutive calls yield a deterministic high entropy series
+        invariantSeed = uint256(keccak256(abi.encode(invariantSeed)));
+
+        // Return the new seed
+        return invariantSeed;
     }
 
-    function _deployFactory(DeployFactoryArgs calldata args) internal {
-        // Deploy Token
-        token = new MockToken({
-            name: "MockToken",
-            symbol: "MOCK",
-            _decimals: _boundUint8(args.decimals, 6, 18),
-            admin: TOKEN_ADMIN,
-            initialAmount: 0
+    // ===== EXTERNAL VIEWS =====
+    function tokenDecimalScaler() external view returns (uint256) {
+        if (!deployed()) {
+            revert("tokenDecimalScaler not set until after token deployment");
+        }
+        return _tokenDecimalScaler;
+    }
+
+    function minSharesDelta() external view returns (uint256) {
+        if (!deployed()) {
+            revert("minSharesDelta not set until after factory deployment");
+        }
+        return _minSharesDelta;
+    }
+
+    function deployed() public view returns (bool) {
+        return address(delphiFactory) != address(0);
+    }
+
+    function usersWithShares() external view returns (address[] memory) {
+        return _usersWithShares.values();
+    }
+
+    function marketProxyConfig() external view returns (LmsrMarket.MarketConfig memory) {
+        if (!deployed()) {
+            revert("_marketProxyConfig not set until after market deployment");
+        }
+        return _marketProxyConfig;
+    }
+
+    function outcomesWithUserShares(address user) external view returns (uint256[] memory) {
+        return _userToOutcomesWithShares[user].values();
+    }
+
+    function usersWithOutcomeShares(uint256 outcomeIdx) external view returns (address[] memory) {
+        return _outcomeToUsersWithShares[outcomeIdx].values();
+    }
+
+    // ========== PUBLIC VIEWS ==========
+    function externalSupply(uint256 outcomeIdx) public view returns (uint256) {
+        return marketProxy.totalSupply(outcomeIdx) - marketProxy.balanceOf(address(marketProxy), outcomeIdx);
+    }
+
+    // ===== INTERNAL =====
+
+    function _deployAll(DeployAllArgs calldata args) internal virtual {
+        (MockToken token_, DelphiAddresses memory deployment_,, ILmsrMarket marketProxy_) = _deployBoundedTokenAndDelphiAndMarket({
+            tokenDecimals: args.tokenDecimals,
+            delphiConfig: args.delphiConfig,
+            marketConfig: args.marketConfig,
+            initialDeposit: args.initialDeposit
         });
 
-        // Set vars
-        tokenDecimals = token.decimals();
-        _tokenDecimalScaler = 10 ** (18 - tokenDecimals);
-        _minMarketCreationFee = _MIN_MARKET_CREATION_FEE_18 / _tokenDecimalScaler;
-        _maxMarketCreationFee = _MAX_MARKET_CREATION_FEE_18 / _tokenDecimalScaler;
-
-        // Deploy Delphi
-        DelphiAddresses memory delphiAddresses = _deployDelphi(
-            DelphiConfig({
-                tradingFeesRecipient: TRADING_FEES_RECIPIENT,
-                marketCreationFeeRecipient: MARKET_CREATION_FEE_RECIPIENT,
-                marketCreationFee: bound(args.marketCreationFee, _minMarketCreationFee, _maxMarketCreationFee),
-                keeperFee: 0,
-                oracleFee: 0,
-                tradingFeesRecipientPct: bound(
-                    args.tradingFeesRecipientPct, _MIN_TRADING_FEES_RECIPIENT_PCT, _MAX_TRADING_FEES_RECIPIENT_PCT
-                ),
-                token: token,
-                gatewayOwner: address(this)
-            })
-        );
-
         // Set contracts
-        dynamicParimutuelGateway = delphiAddresses.dynamicParimutuelGateway;
-        dynamicParimutuelImplementation = delphiAddresses.dynamicParimutuelImplementation;
-        delphiFactory = delphiAddresses.delphiFactory;
+        token = token_;
+        gateway = deployment_.gateway;
+        implementation = deployment_.implementation;
+        delphiFactory = deployment_.factory;
+        marketProxy = marketProxy_;
 
-        // Deploy mock oracle relayer and register it on the gateway.
-        // vm.stopPrank() clears any active prank so msg.sender == address(this) == gateway owner.
-        mockOracleRelayer = new MockOracleRelayer(dynamicParimutuelGateway);
-        vm.stopPrank();
-        dynamicParimutuelGateway.setOracleRelayer(address(mockOracleRelayer));
+        // Deploy mock oracle relayer
+        mockOracleRelayer = new MockOracleRelayer(gateway);
+
+        // Switch to GATEWAY_OWNER
+        _useNewSender(GATEWAY_OWNER);
+
+        // Register oracle relayer on the gateway
+        gateway.setOracleRelayer(address(mockOracleRelayer));
+
+        // Set oracle fee recipient
+        mockOracleRelayer.setOracleFeeRecipient(address(this));
+
+        /* Set lock only to true on the Mock Oracle Relayer
+         * This stops it from immediately settling the market when resolveMarket is called.
+         * This is required to reach the FAILED market status.
+         */
+        mockOracleRelayer.setLockOnly(true);
 
         // Set remaining vars
-        _minSharesDelta = dynamicParimutuelGateway.MIN_SHARES_DELTA();
-    }
+        _minSharesDelta = gateway.MIN_SHARES_DELTA();
 
-    function _deployMarket(DeployMarketArgs memory args) internal virtual {
-        // Generate new market config
-        args = _boundDeployMarketArgs({implementation: dynamicParimutuelImplementation, args: args});
-
-        // Get market creator balance
-        uint256 marketCreatorBalance = token.balanceOf(args.marketCreator);
-
-        // Calculate market creation cost
-        uint256 marketCreationCost = delphiFactory.MARKET_CREATION_FEE() + args.initialDeposit;
-
-        // If market creator can't afford the market creation cost
-        if (marketCreatorBalance < marketCreationCost) {
-            // Deal to market creator
-            deal(address(token), args.marketCreator, marketCreationCost);
-        }
-
-        // Switch to market creator
-        _useNewSender(args.marketCreator);
-
-        // Approve delphi factory to pull market creation cost
-        token.approve(address(delphiFactory), marketCreationCost);
-
-        // Deploy new market proxy
-        marketProxy = IDynamicParimutuelMarket(
-            delphiFactory.deployNewMarketProxy({
-                initialDeposit_: args.initialDeposit,
-                newMarketMetadata_: args.newMarketMetadata,
-                newMarketInitializationCalldata_: abi.encode(args.newMarketConfig)
-            })
-        );
+        // Get market
+        ILmsrMarketTypes.Market memory market = marketProxy.getMarket();
 
         // Set market proxy config
-        IDynamicParimutuelMarketTypes.Market memory market = marketProxy.getMarket();
         _marketProxyConfig = market.config;
 
         // Ensure market is OPEN after deployment
         assertEq(
             uint8(marketProxy.marketStatus()),
-            uint8(IDynamicParimutuelMarketTypes.MarketStatus.OPEN),
+            uint8(ILmsrMarketTypes.MarketStatus.OPEN),
             "_createMarket: marketProxy not OPEN after deployment"
         );
 
-        // Calculate expected initial price
-        uint256 expectedInitialPrice =
-            (args.newMarketConfig.k * ONE) / ((args.newMarketConfig.outcomeCount * 1e36).sqrt() * _tokenDecimalScaler);
+        // Calculate max loss
+        uint256 maxLoss = market.config.b.maxLoss(market.config.outcomeCount, implementation.TOKEN_DECIMAL_SCALER());
+
+        // Validate pool and trading fees
+        assertGe(market.pool, maxLoss, "_createMarket: pool not greater than or equal to max loss");
+        assertEq(market.tradingFees, 0, "_createMarket: trading fees not zero");
 
         // Pick winning outcome idx
-        winningOutcomeIdx = _getRandomIdx(args.newMarketConfig.outcomeCount, args.winningOutcomeIdx);
+        // Note: We pick this early, so we can make trades converge to the winning outcome over time (if we want).
+        winningOutcomeIdx = _getRandomIdx(_marketProxyConfig.outcomeCount, args.winningOutcomeIdx);
 
-        // For each outcome
-        for (uint256 outcomeIdx = 0; outcomeIdx < args.newMarketConfig.outcomeCount; outcomeIdx++) {
-            // Ensure outcome's price matches expectations
-            assertApproxEqRel(
-                marketProxy.spotPrice(outcomeIdx),
-                expectedInitialPrice,
-                BASIS_POINT,
-                "outcomes in newly created market are not equally priced"
-            );
-        }
-
-        // Assert initial pool
-        assertEq(market.pool, market.initialPool, "_createMarket: initial pool not equal to current pool");
+        // Set vars
+        tokenDecimals = token.decimals();
+        _tokenDecimalScaler = 10 ** (18 - tokenDecimals);
     }
 
     function _buyExactOut(BuyExactOutArgs calldata args) internal {
         // Get random outcome for buy exact out
         uint256 outcomeIdx = _getOutcomeForBuyExactOut(args.outcomeIdx);
 
+        // Get max shares out
+        uint256 maxSharesOut = _maxSharesOut(outcomeIdx);
+
+        // Ensure max shares out >= min shares delta
+        if (maxSharesOut < _minSharesDelta) {
+            vm.assume(false);
+        }
+
         // Pick random shares out
-        uint256 sharesOut = bound(args.sharesOut, _minSharesDelta, MAX_SHARES_OUT);
+        uint256 sharesOut = bound(args.sharesOut, _minSharesDelta, maxSharesOut);
 
         // Bound buyer
         // Note: This avoids address(0), without the need for a vm.assume (which reduces coverage)
@@ -331,9 +358,9 @@ contract EndToEndHandler is IEndToEndHandler, DelphiDeployer, DelphiTestUtils {
         bool success;
         bytes4 errSelector;
         if (buyType == BuyType.BUY_WITH_APPROVAL) {
-            (success, errSelector,) = _buyWithApproval({
+            (success, errSelector,) = _buy({
                 buyer: buyer,
-                marketGateway: dynamicParimutuelGateway,
+                marketGateway: gateway,
                 marketProxy: marketProxy,
                 outcomeIdx: outcomeIdx,
                 sharesOut: sharesOut,
@@ -342,7 +369,7 @@ contract EndToEndHandler is IEndToEndHandler, DelphiDeployer, DelphiTestUtils {
         } else {
             (success, errSelector,) = _buyWithPermit({
                 buyerPk: buyerPk,
-                marketGateway: dynamicParimutuelGateway,
+                marketGateway: gateway,
                 marketProxy: marketProxy,
                 outcomeIdx: outcomeIdx,
                 sharesOut: sharesOut,
@@ -379,7 +406,7 @@ contract EndToEndHandler is IEndToEndHandler, DelphiDeployer, DelphiTestUtils {
         uint256 outcomeIdx = _getOutcomeForSellExactIn(args.outcomeIdx);
 
         // Get random user with shares for the outcome
-        address seller = _randomAddressArrayElement(_outcomeToUsersWithShares[outcomeIdx].values(), args.sellerIdx);
+        address seller = _getRandom(_outcomeToUsersWithShares[outcomeIdx].values(), args.sellerIdx);
 
         // Get seller shares
         uint256 sellerShares = marketProxy.balanceOf(seller, outcomeIdx);
@@ -399,7 +426,7 @@ contract EndToEndHandler is IEndToEndHandler, DelphiDeployer, DelphiTestUtils {
         // Sell
         (bool success, bytes4 errSelector,) = _sell({
             seller: seller,
-            marketGateway: dynamicParimutuelGateway,
+            marketGateway: gateway,
             marketProxy: marketProxy,
             outcomeIdx: outcomeIdx,
             sharesIn: sharesIn,
@@ -465,276 +492,148 @@ contract EndToEndHandler is IEndToEndHandler, DelphiDeployer, DelphiTestUtils {
 
     function _resolveMarket() internal {
         uint256 tokenPool = marketProxy.getMarket().pool;
-        tokenRewardPerShare = tokenPool.mulDiv(1e18, marketProxy.totalSupply(winningOutcomeIdx));
+        console2.log("winning outcome supply", marketProxy.totalSupply(winningOutcomeIdx));
+        if (marketProxy.totalSupply(winningOutcomeIdx) == 0) {
+            tokenRewardPerShare = 0;
+        } else {
+            tokenRewardPerShare = tokenPool.mulDiv(1e18, marketProxy.totalSupply(winningOutcomeIdx));
+        }
+        console2.log("token reward per share", tokenRewardPerShare);
 
         // Set outcome on mock oracle, then trigger resolution (resolveMarket → oracle callback → settleMarket)
         mockOracleRelayer.setOutcome(address(marketProxy), winningOutcomeIdx);
-        dynamicParimutuelGateway.resolveMarket(address(marketProxy));
+
+        if (block.timestamp < marketProxy.getMarket().config.earliestResolveTime) {
+            vm.warp(marketProxy.getMarket().config.earliestResolveTime);
+        }
+        gateway.resolveMarket(address(marketProxy));
     }
 
-    function _redeem() internal {
-        // For each user with winning shares
-        for (uint256 i = 0; i < _outcomeToUsersWithShares[winningOutcomeIdx].length(); i++) {
-            // Get user
-            address user = _outcomeToUsersWithShares[winningOutcomeIdx].at(i);
+    function _settleMarket() internal {
+        // Switch to oracle relayer
+        _useNewSender(address(mockOracleRelayer));
 
-            // Get user winning shares
-            uint256 userWinningShares = marketProxy.balanceOf(user, winningOutcomeIdx);
+        // Settle market
+        gateway.settleMarket({
+            marketProxy: address(marketProxy), winningOutcomeIdx: winningOutcomeIdx, oracleFeeRecipient: address(this)
+        });
+    }
 
-            // If user has no winning shares, continue to next user
-            if (userWinningShares == 0) {
-                continue;
-            }
+    function _failMarket() internal {
+        // Switch to oracle relayer
+        _useNewSender(address(mockOracleRelayer));
 
-            // Switch to user
-            _useNewSender(user);
+        // Fail market
+        gateway.failMarket({marketProxy: address(marketProxy)});
+    }
 
-            // Redeem
-            (, uint256 tokensOut) = dynamicParimutuelGateway.redeem(marketProxy);
+    function _redeem(RedeemArgs calldata args) internal {
+        // Get users with winning outcome shares
+        address[] memory usersWithWinningOutcomeShares = _outcomeToUsersWithShares[winningOutcomeIdx].values();
 
-            // Calculate expected tokens out
-            uint256 expectedTokensOut = userWinningShares.mulDiv(tokenRewardPerShare, 1e18);
+        // Get random redeemer
+        address redeemer = _getRandom(usersWithWinningOutcomeShares, args.redeemerIdx);
 
-            // Validate
-            assertApproxEqAbsDecimal(
-                tokensOut, // left
-                expectedTokensOut, // right
-                BASIS_POINT, // tolerance
-                tokenDecimals, // decimals
-                "_redeem: unexpected tokens out"
-            );
+        // If redeemer winning outcome shares are less than token decimal scaler
+        if (marketProxy.balanceOf(redeemer, winningOutcomeIdx) < _tokenDecimalScaler) {
+            // Continue
+            vm.assume(false);
         }
 
-        // Ensure market has all shares
-        assertEqDecimal(
-            marketProxy.balanceOf(address(marketProxy), winningOutcomeIdx),
-            marketProxy.totalSupply(winningOutcomeIdx),
-            tokenDecimals,
-            "_redeem: not all winning shares redeemed"
-        );
-        assertEqDecimal(
-            marketProxy.getMarket().pool, // left
-            0, // right
-            tokenDecimals, // decimals
-            "_redeem: market pool not empty after all redemptions"
-        );
-        assertEqDecimal(
-            marketProxy.getMarket().tradingFees,
-            0,
-            tokenDecimals,
-            "_redeem: market trading fees not empty after all redemptions"
-        );
-        assertApproxEqAbsDecimal(
-            token.balanceOf(address(marketProxy)),
-            0,
-            BASIS_POINT,
-            tokenDecimals,
-            "_redeem: market token balance not zero after all redemptions"
-        );
+        // Switch to redeemer
+        _useNewSender(redeemer);
 
-        // Mark as redeemed
-        redeemed = true;
+        // Redeem
+        gateway.redeem({marketProxy: marketProxy});
+
+        /* Redemption pulls all winning outcome shares from the redeemer.
+         * Therefore, the redeemer will no longer have winning outcome shares.
+         */
+        _outcomeToUsersWithShares[winningOutcomeIdx].remove(redeemer);
+        _userToOutcomesWithShares[redeemer].remove(winningOutcomeIdx);
+
+        // If redeemer has no more outcomes with shares
+        if (_userToOutcomesWithShares[redeemer].length() == 0) {
+            _usersWithShares.remove(redeemer);
+        }
     }
 
     function _liquidate(LiquidateArgs calldata args) internal {
-        // Initialize share bank
-        address shareBank = makeAddr("shareBank");
+        // Get liquidator (a random user with shares)
+        address liquidator = _getRandom(_usersWithShares.values(), args.liquidatorIdx);
 
-        // Get users with shares count
-        uint256 usersWithSharesCount = _usersWithShares.length();
+        // Get liquidator's outcomes with shares
+        uint256[] memory liquidatorOutcomesWithShares = _userToOutcomesWithShares[liquidator].values();
 
-        // If there are no users with shares
-        if (usersWithSharesCount == 0) {
-            // Cannot Liquidate. Exit
-            // _saveReturn(NoUsersWithShares.selector);
-            return;
-        }
+        // Build outcome indices array
+        uint256[] memory outcomeIndices;
 
-        // For each user
-        for (uint256 i = 0; i < usersWithSharesCount; i++) {
-            // Get user
-            address user = _usersWithShares.at(i);
-
-            // Get user outcomes with shares
-            uint256[] memory userOutcomeIndices = _userToOutcomesWithShares[user].values();
-
-            // For each outcome with user shares
-            for (uint256 j = 0; j < userOutcomeIndices.length; j++) {
-                // Get outcome index
-                uint256 outcomeIdx = userOutcomeIndices[j];
-
-                // Get user shares for the outcome
-                uint256 userShares = marketProxy.balanceOf(user, outcomeIdx);
-
-                // Switch to user
-                _useNewSender(user);
-
-                // Transfer user shares to share bank
-                marketProxy.transfer(shareBank, outcomeIdx, userShares);
-
-                // Add outcome to outcomes with shares for share bank
-                _userToOutcomesWithShares[shareBank].add(outcomeIdx);
-            }
-        }
-
-        // Get share bank outcomes with shares
-        uint256[] memory shareBankOutcomeIndices = _userToOutcomesWithShares[shareBank].values();
-
-        // Initialize array to track share bank shares for each outcome
-        uint256[] memory bankSharesPerOutcome = new uint256[](shareBankOutcomeIndices.length);
-
-        // Initialize shares bank lowest outcome balance
-        uint256 shareBankLowestOutcomeBalance = type(uint256).max;
-
-        // For each outcome
-        for (uint256 i = 0; i < shareBankOutcomeIndices.length; i++) {
+        // For each outcome with liquidator shares
+        for (uint256 i = 0; i < liquidatorOutcomesWithShares.length; i++) {
             // Get outcome index
-            uint256 outcomeIdx = shareBankOutcomeIndices[i];
+            uint256 outcomeIdx = liquidatorOutcomesWithShares[i];
 
-            // Get share bank shares for the outcome
-            uint256 shareBankOutcomeShares = marketProxy.balanceOf(shareBank, outcomeIdx);
+            // Get liquidator shares for the outcome
+            uint256 liquidatorShares = marketProxy.balanceOf(liquidator, outcomeIdx);
 
-            // Save share bank shares for the outcome
-            // Note: use i here, not outcomeIdx
-            bankSharesPerOutcome[i] = shareBankOutcomeShares;
+            // Figure out if outcome is picked
+            bool picked = outcomeIdx < args.pickedOutcomesByIdx.length && args.pickedOutcomesByIdx[outcomeIdx];
 
-            // If new lowest outcome balance
-            if (shareBankOutcomeShares < shareBankLowestOutcomeBalance) {
-                // Update share bank lowest outcome balance
-                shareBankLowestOutcomeBalance = shareBankOutcomeShares;
-            }
-        }
+            // If outcome not picked OR liquidator shares < token decimal scaler
+            if (!picked || liquidatorShares < _tokenDecimalScaler) {
+                // Continue
+                continue;
 
-        // Validate share bank lowest outcome balance
-        assertGt(
-            shareBankLowestOutcomeBalance, 0, "_liquidate: share bank lowest outcome balance is zero, cannot liquidate"
-        );
-
-        // Bound liquidator count
-        // Note: cap to 10 to prevent `OutOfGas` errors
-        uint256 liquidatorCount = bound(args.liquidatorCount, 1, Math.min(shareBankLowestOutcomeBalance, 10));
-
-        // Initialize var
-        uint256 firstLiquidatorTotalTokensOut;
-
-        // For each liquidator
-        for (uint256 i = 0; i < liquidatorCount; i++) {
-            // Get liquidator
-            address liquidator = makeAddr(string(abi.encodePacked("liquidator", vm.toString(i))));
-
-            // For each outcome with shares in share bank
-            for (uint256 j = 0; j < shareBankOutcomeIndices.length; j++) {
-                // Get outcome index
-                uint256 outcomeIdx = shareBankOutcomeIndices[j];
-
-                // Calculate outcome shares per liquidator
-                // Note: use j here, not outcomeIdx
-                uint256 outcomeSharesPerLiquidator = bankSharesPerOutcome[j] / liquidatorCount;
-
-                // Ensure outcome shares per liquidator is greater than zero
-                assertGt(outcomeSharesPerLiquidator, 0, "_liquidate: outcome shares per liquidator is zero");
-
-                // Switch to share bank
-                _useNewSender(shareBank);
-
-                // Give shares to liquidator
-                marketProxy.transfer(liquidator, outcomeIdx, outcomeSharesPerLiquidator);
-            }
-
-            // Switch to liquidator
-            _useNewSender(liquidator);
-
-            // Liquidate
-            (, uint256 totalTokensOut) =
-                dynamicParimutuelGateway.liquidate({marketProxy: marketProxy, outcomeIndices: shareBankOutcomeIndices});
-
-            // If first liquidator
-            if (i == 0) {
-                // Save total tokens out for first liquidator
-                firstLiquidatorTotalTokensOut = totalTokensOut;
-
-                // If not first liquidator
+                // If outcome picked AND liquidator shares >= token decimal scaler
             } else {
-                // Ensure liquidations are order-independent
-                assertEq(
-                    totalTokensOut,
-                    firstLiquidatorTotalTokensOut,
-                    "_liquidate: total tokens out not equal for liquidators with equal shares"
-                );
+                // Add outcome to outcome indices array
+                outcomeIndices = _appendToArray(outcomeIndices, outcomeIdx);
             }
         }
 
-        // Liquidate the creator's market-creation shares too. This is decoupled from the trader liquidate()
-        // path (it is no longer auto-called), so the market only fully drains once it is invoked explicitly.
-        // Order-independent, so it is fine to call it after the trader liquidations.
-        if (!marketProxy.marketCreationSharesLiquidated()) {
-            dynamicParimutuelGateway.liquidateMarketCreationShares(marketProxy);
+        if (outcomeIndices.length == 0) {
+            vm.assume(false);
         }
 
-        // Ensure market is empty after all liquidations
-        for (uint256 outcomeIdx = 0; outcomeIdx < _marketProxyConfig.outcomeCount; outcomeIdx++) {
-            assertApproxEqAbsDecimal(
-                marketProxy.balanceOf(address(marketProxy), outcomeIdx),
-                marketProxy.totalSupply(outcomeIdx),
-                BASIS_POINT,
-                tokenDecimals,
-                "_liquidate: not all shares liquidated for outcome index"
-            );
+        // Switch to liquidator
+        _useNewSender(liquidator);
+
+        // Liquidate
+        try gateway.liquidate({marketProxy: marketProxy, outcomeIndices: outcomeIndices}) {
+            // For each outcome in outcomeIndices
+            for (uint256 i = 0; i < outcomeIndices.length; i++) {
+                // Get outcome index
+                uint256 outcomeIdx = outcomeIndices[i];
+
+                // Remove liquidator from users with shares for the outcome
+                _outcomeToUsersWithShares[outcomeIdx].remove(liquidator);
+
+                // Remove outcome from liquidator's outcomes with shares
+                _userToOutcomesWithShares[liquidator].remove(outcomeIdx);
+
+                // If liquidator has no more outcomes with shares
+                if (_userToOutcomesWithShares[liquidator].length() == 0) {
+                    // Remove liquidator from users with shares
+                    _usersWithShares.remove(liquidator);
+                }
+            }
+
+            // If liquidation fails
+        } catch (bytes memory err) {
+            _handleCatch(err, _liquidateAllowedErrors());
         }
-        // assertEqDecimal(marketProxy.getMarket().pool, 0, tokenDecimals, "market pool not empty after all liquidations");
-        assertApproxEqAbsDecimal(
-            marketProxy.getMarket().tradingFees,
-            0,
-            BASIS_POINT,
-            tokenDecimals,
-            "_liquidate: market trading fees not empty after all liquidations"
-        );
-        assertApproxEqAbsDecimal(
-            token.balanceOf(address(marketProxy)),
-            0,
-            BASIS_POINT,
-            tokenDecimals,
-            "_liquidate: market token balance not zero after all liquidations"
-        );
-
-        // Mark as liquidated
-        liquidated = true;
     }
 
-    // ========== EXTERNAL VIEWS ==========
-    function tokenDecimalScaler() external view returns (uint256) {
-        if (!deployed()) {
-            revert("tokenDecimalScaler not set until after token deployment");
-        }
-        return _tokenDecimalScaler;
+    function _trySweep() internal {
+        // Try sweep
+        gateway.trySweep({marketProxy: marketProxy});
     }
 
-    function minSharesDelta() external view returns (uint256) {
-        if (!deployed()) {
-            revert("minSharesDelta not set until after factory deployment");
-        }
-        return _minSharesDelta;
-    }
-
-    function deployed() public view returns (bool) {
-        return address(delphiFactory) != address(0);
-    }
-
-    function usersWithShares() external view returns (address[] memory) {
-        return _usersWithShares.values();
-    }
-
-    function marketProxyConfig() external view returns (DynamicParimutuelMarket.MarketConfig memory) {
-        if (!deployed()) {
-            revert("_marketProxyConfig not set until after market deployment");
-        }
-        return _marketProxyConfig;
-    }
-
-    // ========== INTERNAL ==========
     function _saveReturn(bytes4 selector) internal {
         returnCount[selector]++;
     }
+
+    // ========== INTERNAL VIEWS ==========
 
     function _getOutcomeForBuyExactOut(uint256 outcomeIdxSeed) internal view virtual returns (uint256 outcomeIdx) {
         return _getRandomIdx(_marketProxyConfig.outcomeCount, outcomeIdxSeed);
@@ -743,7 +642,7 @@ contract EndToEndHandler is IEndToEndHandler, DelphiDeployer, DelphiTestUtils {
     function _getOutcomeForSellExactIn(uint256 outcomeIdxSeed) internal view virtual returns (uint256 outcomeIdx) {
         // Get vars
         uint256 losingOutcomesIndicesWithExternalSharesCount = _losingOutcomeIndicesWithExternalShares.length();
-        uint256 winningOutcomeExternalSupply = _externalSupply(winningOutcomeIdx);
+        uint256 winningOutcomeExternalSupply = externalSupply(winningOutcomeIdx);
 
         // If external shares exist for both losing and winning outcomes
         if (losingOutcomesIndicesWithExternalSharesCount > 0 && winningOutcomeExternalSupply > 0) {
@@ -752,12 +651,12 @@ contract EndToEndHandler is IEndToEndHandler, DelphiDeployer, DelphiTestUtils {
                 _appendToArray({arr: _losingOutcomeIndicesWithExternalShares.values(), element: winningOutcomeIdx});
 
             // Return random outcome (from all outcomes with positive supply)
-            outcomeIdx = _randomUintArrayElement(allOutcomeIndicesWithPositiveSupply, outcomeIdxSeed);
+            outcomeIdx = _getRandom(allOutcomeIndicesWithPositiveSupply, outcomeIdxSeed);
 
             // If there are only external shares for losing outcomes
         } else if (losingOutcomesIndicesWithExternalSharesCount > 0) {
             // Return random losing outcome
-            outcomeIdx = _randomUintArrayElement(_losingOutcomeIndicesWithExternalShares.values(), outcomeIdxSeed);
+            outcomeIdx = _getRandom(_losingOutcomeIndicesWithExternalShares.values(), outcomeIdxSeed);
 
             // If there are only external shares for the winning outcome
         } else if (winningOutcomeExternalSupply > 0) {
@@ -777,22 +676,7 @@ contract EndToEndHandler is IEndToEndHandler, DelphiDeployer, DelphiTestUtils {
         );
     }
 
-    function _randomAddressArrayElement(address[] memory arr, uint256 idxSeed) internal pure returns (address) {
-        return arr[_getRandomIdx(arr.length, idxSeed)];
-    }
-
-    function _randomUintArrayElement(uint256[] memory arr, uint256 idxSeed) internal pure returns (uint256) {
-        return arr[_getRandomIdx(arr.length, idxSeed)];
-    }
-
-    function _getRandomIdx(uint256 length, uint256 seed) internal pure returns (uint256) {
-        require(length > 0, "_getRandomIdx: length cannot be zero");
-        return bound(seed, 0, length - 1);
-    }
-
-    function _externalSupply(uint256 outcomeIdx) internal view returns (uint256) {
-        return marketProxy.totalSupply(outcomeIdx) - marketProxy.balanceOf(address(marketProxy), outcomeIdx);
-    }
+    // ========== INTERNAL PURE ==========
 
     function _appendToArray(uint256[] memory arr, uint256 element) internal pure returns (uint256[] memory newArr) {
         newArr = new uint256[](arr.length + 1);
@@ -802,7 +686,23 @@ contract EndToEndHandler is IEndToEndHandler, DelphiDeployer, DelphiTestUtils {
         newArr[arr.length] = element;
     }
 
-    function userOutcomesWithShares(address user) external view returns (uint256[] memory) {
-        return _userToOutcomesWithShares[user].values();
+    function _maxSharesOut(uint256 outcomeIdx) internal view returns (uint256) {
+        // Get outcome current supply
+        uint256 outcomeCurrentSupply = marketProxy.totalSupply(outcomeIdx);
+
+        /* outcomeCurrentSupply + sharesOut <= type(uint256).max
+         * sharesOut <= type(uint256).max - outcomeCurrentSupply
+         */
+        uint256 maxSharesOut1 = type(uint256).max - outcomeCurrentSupply;
+
+        /* outcomeNewSupply.mulDiv(1e18, b) <= MAX_EXP_INPUT
+         * outcomeNewSupply <= MAX_EXP_INPUT.mulDiv(b, 1e18)
+         * outcomeCurrentSupply + sharesOut <= MAX_EXP_INPUT.mulDiv(b, 1e18)
+         * sharesOut <= MAX_EXP_INPUT.mulDiv(b, 1e18) - outcomeCurrentSupply
+         */
+        uint256 maxSharesOut2 = LmsrMath.MAX_EXP_INPUT.mulDiv(_marketProxyConfig.b, 1e18) - outcomeCurrentSupply;
+
+        // Return smallest max
+        return Math.min(maxSharesOut1, maxSharesOut2);
     }
 }

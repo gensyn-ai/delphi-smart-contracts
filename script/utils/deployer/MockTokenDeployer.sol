@@ -2,7 +2,7 @@
 pragma solidity 0.8.30;
 
 // Contracts
-import {MockToken} from "src/mock/MockToken.sol";
+import {MockToken} from "test/support/mocks/MockToken.sol";
 
 // Interfaces
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
