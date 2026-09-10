@@ -10,13 +10,13 @@
     },
     "implementation": {
         "tradingFeesRecipient": "0x0000000000000000000000000000000000000000",
-        "tradingFeesRecipientPct": 100000000000000000
+        "tradingFeesRecipientPct": 100000000000000000,
+        "keeperFee": 0,
+        "oracleFee": 0
     },
     "factory": {
         "marketCreationFeeRecipient": "0x0000000000000000000000000000000000000000",
-        "marketCreationFee": 0,
-        "keeperFee": 0,
-        "oracleFee": 0
+        "marketCreationFee": 0
     },
     "gateway": {
         "owner": "0x0000000000000000000000000000000000000000"

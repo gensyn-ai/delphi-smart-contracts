@@ -2,7 +2,7 @@
 pragma solidity 0.8.30;
 
 // Inheritance
-import {BaseTest} from "test/utils/BaseTest.t.sol";
+import {BaseTest} from "test/support/utils/BaseTest.t.sol";
 
 // Contracts
 import {IEndToEndHandler} from "../handlers/IEndToEndHandler.sol";
@@ -13,6 +13,12 @@ abstract contract Invariants_Base is BaseTest {
 
     modifier ifDeployed() {
         if (handler.deployed()) {
+            _;
+        }
+    }
+
+    modifier ifNoTradesYet() {
+        if (handler.tradeCount() == 0) {
             _;
         }
     }

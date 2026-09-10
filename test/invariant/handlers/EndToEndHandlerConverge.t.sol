@@ -21,10 +21,12 @@ contract EndToEndHandler_Converge is EndToEndHandler {
         EndToEndHandler(minTradesPerMarket, maxTradesPerMarket, maxTraderCount)
     {}
 
-    function _deployMarket(DeployMarketArgs memory args) internal override {
+    // ========== INTERNAL FUNCTIONS ==========
+
+    function _deployAll(DeployAllArgs calldata args) internal override {
         // Deploy market
         // Note: sets marketProxyConfig and winningOutcomeIdx
-        super._deployMarket(args);
+        super._deployAll(args);
 
         // For each outcome
         for (uint256 i = 0; i < _marketProxyConfig.outcomeCount; i++) {
@@ -36,6 +38,8 @@ contract EndToEndHandler_Converge is EndToEndHandler {
         }
     }
 
+    // ========== INTERNAL VIEWS ==========
+
     function _getOutcomeForBuyExactOut(uint256 outcomeIdxSeed) internal view override returns (uint256) {
         // If winner is selected (with increasing probability as trade count increases)
         if (_winnerSelectedIncreasing(outcomeIdxSeed)) {
@@ -45,7 +49,7 @@ contract EndToEndHandler_Converge is EndToEndHandler {
             // If winner is not selected
         } else {
             // Return random losing outcome (with external shares or not, doesn't matter for buyExactOut)
-            return _randomUintArrayElement(_losingOutcomeIndices.values(), outcomeIdxSeed);
+            return _getRandom(_losingOutcomeIndices.values(), outcomeIdxSeed);
         }
     }
 
@@ -61,7 +65,7 @@ contract EndToEndHandler_Converge is EndToEndHandler {
         if (_losingOutcomeIndicesWithExternalShares.length() == 0) {
             // Ensure winning outcome has external shares
             assertGt(
-                _externalSupply(winningOutcomeIdx),
+                externalSupply(winningOutcomeIdx),
                 0,
                 "_getOutcomeForSellExactIn: neither winning outcome nor losing outcomes have external shares"
             );
@@ -74,18 +78,18 @@ contract EndToEndHandler_Converge is EndToEndHandler {
             // If winner is selected (with decreasing probability as trade count increases)
             if (_winnerSelectedDecreasing(outcomeIdxSeed)) {
                 // If external shares exist for winning outcome
-                if (_externalSupply(winningOutcomeIdx) > 0) {
+                if (externalSupply(winningOutcomeIdx) > 0) {
                     // Return winning outcome
                     return winningOutcomeIdx;
                 }
             }
 
             // Return random losing outcome with external shares
-            return _randomUintArrayElement(_losingOutcomeIndicesWithExternalShares.values(), outcomeIdxSeed);
+            return _getRandom(_losingOutcomeIndicesWithExternalShares.values(), outcomeIdxSeed);
         }
     }
 
-    // ========== PRIVATE ==========
+    // ========== PRIVATE VIEWS ==========
     function _winnerSelectedIncreasing(uint256 randomness) private view returns (bool) {
         return bound(randomness, 0, 100) <= _tradeCountPct();
     }

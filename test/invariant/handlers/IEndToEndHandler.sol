@@ -2,54 +2,54 @@
 pragma solidity 0.8.30;
 
 // Contracts
-import {DynamicParimutuelGateway} from "src/delphi/dynamicParimutuel/gateway/DynamicParimutuelGateway.sol";
-import {DynamicParimutuelMarket} from "src/delphi/dynamicParimutuel/implementation/DynamicParimutuelMarket.sol";
-import {DelphiFactory} from "src/delphi/factory/DelphiFactory.sol";
+import {LmsrGateway} from "src/lmsr/gateway/LmsrGateway.sol";
+import {LmsrMarket} from "src/lmsr/implementation/LmsrMarket.sol";
+import {DelphiFactory} from "src/factory/DelphiFactory.sol";
+import {DelphiDeployer} from "script/utils/deployer/DelphiDeployer.sol";
+import {MockOracleRelayer} from "test/support/mocks/MockOracleRelayer.sol";
 
 // Interfaces
-import {IDelphiMarket} from "src/delphi/IDelphiMarket.sol";
-import {IDynamicParimutuelMarket} from "src/delphi/dynamicParimutuel/implementation/IDynamicParimutuelMarket.sol";
+import {ILmsrMarket} from "src/lmsr/implementation/ILmsrMarket.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 interface IEndToEndHandler {
-    // Errors
+    // ===== ERRORS =====
     error NoPossibleActions();
 
-    // Types
+    // ===== ENUMS =====
     enum Action {
         DEPLOY_FACTORY_AND_MARKET,
         BUY_EXACT_OUT,
         SELL_EXACT_IN,
         SKIP_TIME,
         RESOLVE_MARKET,
+        SETTLE_MARKET,
+        FAIL_MARKET,
         REDEEM,
-        LIQUIDATE
+        LIQUIDATE,
+        TRY_SWEEP
     }
 
+    // ===== STRUCTS =====
     struct StepArgs {
+        InvariantArgs invariantArgs;
         uint256 actionIdx;
-        DeployFactoryAndMarketArgs deployFactoryAndMarket;
+        DeployAllArgs deployAll;
         BuyExactOutArgs buyExactOut;
         SellExactInArgs sellExactIn;
         SkipTimeArgs skipTime;
+        RedeemArgs redeem;
         LiquidateArgs liquidate;
     }
 
-    struct DeployFactoryAndMarketArgs {
-        DeployFactoryArgs factory;
-        DeployMarketArgs market;
+    struct InvariantArgs {
+        uint256 invariantSeed;
     }
 
-    struct DeployFactoryArgs {
-        uint8 decimals;
-        uint256 marketCreationFee;
-        uint256 tradingFeesRecipientPct;
-    }
-
-    struct DeployMarketArgs {
-        IDelphiMarket.VerifiableUri newMarketMetadata;
-        address marketCreator;
-        IDynamicParimutuelMarket.MarketConfig newMarketConfig;
+    struct DeployAllArgs {
+        uint8 tokenDecimals;
+        DelphiDeployer.DelphiConfig delphiConfig;
+        ILmsrMarket.MarketConfig marketConfig;
         uint256 initialDeposit;
         uint256 winningOutcomeIdx;
     }
@@ -84,26 +84,47 @@ interface IEndToEndHandler {
         uint8 action;
     }
 
-    struct LiquidateArgs {
-        uint256 liquidatorCount;
+    struct RedeemArgs {
+        uint256 redeemerIdx;
     }
 
-    // Functions
-    function step(StepArgs calldata args) external;
+    struct LiquidateArgs {
+        uint256 liquidatorIdx;
+        bool[] pickedOutcomesByIdx;
+    }
 
-    // Views
-    function deployed() external view returns (bool);
+    // ===== EXTERNAL FUNCTIONS =====
+    function step(StepArgs calldata args) external;
+    function consumeInvariantSeed() external returns (uint256);
+
+    // ===== EXTERNAL VIEWS =====
+
+    // Delphi Config
+    function tokenDecimals() external view returns (uint8);
+
+    // Contracts
     function token() external view returns (IERC20Metadata);
-    function returnCount(bytes4 errorSelector) external view returns (uint256);
-    function marketProxy() external view returns (IDynamicParimutuelMarket);
-    function dynamicParimutuelGateway() external view returns (DynamicParimutuelGateway);
-    function dynamicParimutuelImplementation() external view returns (DynamicParimutuelMarket);
+    function gateway() external view returns (LmsrGateway);
+    function implementation() external view returns (LmsrMarket);
     function delphiFactory() external view returns (DelphiFactory);
+    function marketProxy() external view returns (ILmsrMarket);
+    function mockOracleRelayer() external view returns (MockOracleRelayer);
+
+    // Market Info
+    function tradeCount() external view returns (uint256);
+
+    // Return Counts
+    function returnCount(bytes4 errorSelector) external view returns (uint256);
+
+    // External Views
     function tokenDecimalScaler() external view returns (uint256);
     function minSharesDelta() external view returns (uint256);
+    function deployed() external view returns (bool);
     function usersWithShares() external view returns (address[] memory);
-    function tokenDecimals() external view returns (uint8);
-    function marketProxyConfig() external view returns (DynamicParimutuelMarket.MarketConfig memory);
+    function marketProxyConfig() external view returns (LmsrMarket.MarketConfig memory);
+    function outcomesWithUserShares(address user) external view returns (uint256[] memory);
+    function usersWithOutcomeShares(uint256 outcomeIdx) external view returns (address[] memory);
 
-    function userOutcomesWithShares(address user) external view returns (uint256[] memory);
+    // Public Views
+    function externalSupply(uint256 outcomeIdx) external view returns (uint256);
 }

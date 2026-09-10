@@ -2,11 +2,11 @@
 pragma solidity 0.8.30;
 
 // Contracts
-import {TruebitOracleRelayer} from "src/delphi/oracle/TruebitOracleRelayer.sol";
+import {TruebitOracleRelayer} from "src/oracle/TruebitOracleRelayer.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 // Interfaces
-import {IDynamicParimutuelGateway} from "src/delphi/dynamicParimutuel/gateway/IDynamicParimutuelGateway.sol";
+import {ILmsrGateway} from "src/lmsr/gateway/ILmsrGateway.sol";
 
 contract TruebitOracleRelayerDeployer {
     // Errors
@@ -23,7 +23,7 @@ contract TruebitOracleRelayerDeployer {
 
     function _deployTruebitOracleRelayerProxy(
         address watchTower,
-        IDynamicParimutuelGateway gateway,
+        ILmsrGateway gateway,
         uint256 executionTimeout,
         bool async_,
         address implementation,
@@ -50,7 +50,7 @@ contract TruebitOracleRelayerDeployer {
 
     function _validateArgs(
         address watchTower,
-        IDynamicParimutuelGateway gateway,
+        ILmsrGateway gateway,
         uint256 executionTimeout,
         TruebitOracleRelayer.InitParams memory params
     ) private pure {
@@ -66,7 +66,7 @@ contract TruebitOracleRelayerDeployer {
     function _validateReusedImplementation(
         address implementation,
         address watchTower,
-        IDynamicParimutuelGateway gateway,
+        ILmsrGateway gateway,
         uint256 executionTimeout,
         bool async_
     ) private view {

@@ -8,14 +8,12 @@ import {MockTokenDeployer} from "script/utils/deployer/MockTokenDeployer.sol";
 
 // Libraries
 import {stdJson} from "forge-std/StdJson.sol";
-import {SetupMarketCreationUtils} from "script/utils/SetupMarketCreationUtils.sol";
 
 // Interfaces
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 contract DeployDelphi_Script is DelphiDeployer, MockTokenDeployer, BaseScript {
     // Libraries
-    using SetupMarketCreationUtils for string;
     using stdJson for string;
 
     function run() external broadcast returns (IERC20Metadata token, DelphiAddresses memory delphi) {
@@ -28,8 +26,8 @@ contract DeployDelphi_Script is DelphiDeployer, MockTokenDeployer, BaseScript {
         uint256 tradingFeesRecipientPct = json.readUint(".implementation.tradingFeesRecipientPct");
         address marketCreationFeeRecipient = json.readAddress(".factory.marketCreationFeeRecipient");
         uint256 marketCreationFee = json.readUint(".factory.marketCreationFee");
-        uint256 keeperFee = json.readUint(".factory.keeperFee");
-        uint256 oracleFee = json.readUint(".factory.oracleFee");
+        uint256 keeperFee = json.readUint(".implementation.keeperFee");
+        uint256 oracleFee = json.readUint(".implementation.oracleFee");
         address gatewayOwner = json.readAddress(".gateway.owner");
 
         delphi = _deployDelphi(

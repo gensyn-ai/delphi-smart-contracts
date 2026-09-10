@@ -2,13 +2,13 @@
 pragma solidity 0.8.30;
 
 // Inheritance
-import {DynamicParimutuel_Invariants} from "./dpm/DynamicParimutuelInvariants.t.sol";
+import {Lmsr_Invariants} from "./lmsr/LmsrInvariants.t.sol";
 import {Token_Invariants} from "./token/TokenInvariants.t.sol";
 
 // Other
 import {IEndToEndHandler} from "../handlers/IEndToEndHandler.sol";
 
-abstract contract All_Invariants is DynamicParimutuel_Invariants, Token_Invariants {
+abstract contract All_Invariants is Lmsr_Invariants, Token_Invariants {
     struct Error {
         string label;
         bytes4 selector;

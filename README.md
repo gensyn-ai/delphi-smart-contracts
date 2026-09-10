@@ -9,11 +9,12 @@ This project was built using [Foundry](https://book.getfoundry.sh/). Refer to th
 After installing Foundry, run the following commands to install the project locally:
 
 ```sh
-curl -L https://foundry.paradigm.xyz | bash && foundryup
 git clone https://github.com/gensyn-ai/delphi-smart-contracts/
 cd delphi-smart-contracts
-forge install
+git submodule update --init --recursive
 ```
+
+Note: All the following scripts should be run from the repository root
 
 ## Running Scripts
 
@@ -25,6 +26,10 @@ The available networks for the `NETWORK` flag are:
 - `anvil`
 - `gensyn-testnet`
 - `gensyn-mainnet`
+
+> **Mainnet guard:** `BaseScript`'s `broadcast` modifier currently reverts on the Gensyn mainnet chain id (685689), so every scripted run — including simulation — refuses to run against `gensyn-mainnet`. Remove or gate that check deliberately when a mainnet deploy is actually intended.
+
+> **Interactive signer:** all on-chain `make` targets pass `--interactives 1` to `forge script`, so they require a real terminal (TTY) where you type the private key when prompted. They will fail with `vm.startBroadcast: Device not configured` if run non-interactively (e.g. piped or in CI).
 
 Note: Before running scripts on `anvil`, you must first spin up an anvil node.
 
@@ -38,8 +43,8 @@ anvil
 To deploy Delphi start by filling out the [`DeployDelphi.json`](script/input/deployment/DeployDelphi.json) file.
 
 Note that:
-- If you want to use an already deployed token, put its address in `token.address`, and specify its decimals in `token.config.decimals`
-- If you want to deploy and use a new token, leave the `token.address` field as `0x0000000000000000000000000000000000000000`, and fill out the `token.config` as desired
+- If you want to use an already deployed token, put its address in `token.address` (the `token.config` section will be ignored)
+- If you want to deploy and use a new mock token (6 decimals), leave the `token.address` field as `0x0000000000000000000000000000000000000000`, and fill out the `token.config` as desired
 
 Then, to simulate, run:
 ```bash
@@ -79,99 +84,71 @@ Then, to execute
 make create-market NETWORK=${your-chosen-network} BROADCAST=1
 ```
 
-### 3c) Deploy Gensyn Faucet
+### 3c) Deploy Truebit Oracle Relayer
 
-To deploy a Gensyn Faucet, start by filling out the [`DeployFaucet.json`](script/input/deployment/DeployFaucet.json) file:
+To deploy a Truebit Oracle Relayer, start by filling out the [`DeployTruebitOracleRelayer.json`](script/input/deployment/DeployTruebitOracleRelayer.json) file:
 
 | Field | Description |
 |---|---|
-| `token` | Address of the deployed Gensyn ERC-20 token. |
-| `admin` | Address that will be granted `DEFAULT_ADMIN_ROLE` (can authorize upgrades). |
-| `dripManager` | Address that will be granted `DRIP_MANAGER_ROLE` (can update drip time and amount). |
-| `dripTime` | Minimum time (in seconds) a user must wait between drip requests. |
-| `dripAmount` | Amount of tokens (in wei) dispensed per drip request. |
-| `implementation` | Set to `0x0000000000000000000000000000000000000000` to deploy a new implementation, or provide an existing implementation address to reuse it. When reusing, the implementation's `GENSYN_TOKEN` must match `token`. |
+| `watchTower` | Address of the Truebit WatchTower the relayer submits execution requests to. |
+| `owner` | Address that will own the relayer (can authorize UUPS upgrades). |
+| `gateway` | Address of the deployed `LmsrGateway`. |
+| `oracleFeeRecipient` | Address that receives the oracle fee on successful market settlement. |
+| `executionTimeout` | Truebit task execution timeout (in seconds). Must be non-zero. |
+| `async` | Whether the Truebit task executes asynchronously. |
+| `implementation` | Set to `0x0000000000000000000000000000000000000000` to deploy a new implementation, or provide an existing implementation address to reuse it. |
 
 Then, to simulate, run:
 ```bash
-make deploy-faucet NETWORK=${your-chosen-network}
+make deploy-truebit-oracle-relayer NETWORK=${your-chosen-network}
 ```
 
 Or to deploy (without verifying), run:
 ```bash
-make deploy-faucet NETWORK=${your-chosen-network} BROADCAST=1 VERIFY=0
+make deploy-truebit-oracle-relayer NETWORK=${your-chosen-network} BROADCAST=1 VERIFY=0
 ```
 
 Or to deploy and verify, run:
 ```bash
-make deploy-faucet NETWORK=${your-chosen-network} BROADCAST=1 VERIFY=1
+make deploy-truebit-oracle-relayer NETWORK=${your-chosen-network} BROADCAST=1 VERIFY=1
 ```
 
-## 4. Gnosis Safe Operations
+Note: After deployment, the gateway owner must wire the relayer into the gateway via `setOracleRelayer(relayerProxy)`. Markets cannot be created until the gateway has an oracle relayer set.
 
-This section describes how to perform operations on a Gnosis Safe, such as removing an owner or executing a custom transaction.
+### 3d) Deploy Timelock
 
-### 4.1 Deploying a new Safe Proxy
+To deploy an OpenZeppelin `TimelockController` (open executor, no admin), start by filling out the [`DeployTimelock.json`](script/input/deployment/DeployTimelock.json) file:
 
-To deploy a Safe, start by filling out the [`DeploySafe.json`](script/input/deployment/DeploySafe.json) file:
+| Field | Description |
+|---|---|
+| `proposer` | Address granted the proposer (and canceller) role on the timelock. |
+| `timelock.minDelay` | Minimum delay (in seconds) between scheduling and executing an operation. |
 
 Then, to simulate, run:
 ```bash
-make deploy-safe NETWORK=${your-chosen-network}
+make deploy-timelock NETWORK=${your-chosen-network}
 ```
 
 Or to deploy (without verifying), run:
 ```bash
-make deploy-safe NETWORK=${your-chosen-network} BROADCAST=1 VERIFY=0
+make deploy-timelock NETWORK=${your-chosen-network} BROADCAST=1 VERIFY=0
 ```
 
 Or to deploy and verify, run:
 ```bash
-make deploy-safe NETWORK=${your-chosen-network} BROADCAST=1 VERIFY=1
+make deploy-timelock NETWORK=${your-chosen-network} BROADCAST=1 VERIFY=1
 ```
 
-### 4.2 The Signing Process
+## Testing
 
-All Gnosis Safe transactions require one or more signatures from the safe owners. The number of required signatures is determined by the safe's threshold. The general process for signing a transaction is as follows:
+To run the full test suite:
+```bash
+forge test
+```
 
-1.  **Launch the Safe Signing UI:**
-    ```bash
-    make run-safe-signing-ui
-    ```
-2.  **Navigate to the UI:** Open `http://localhost:8000/safe-signing-ui.html` in your browser.
-3.  **Connect and Fill:** Connect your wallet and fill out the form fields for the transaction you want to sign. You will need the safe's nonce, which can be obtained by running:
-    ```bash
-    cast call ${safeProxyAddress} "nonce()(uint256)" --rpc-url ${network}
-    ```
-4.  **Sign:** Click the `Sign EIP-712` button and sign the transaction in your wallet. The signature will be displayed in the `Signature` box.
-5.  **Collect Signatures:** Copy the signature and save it. Repeat this process for each required owner until the threshold is met.
+To generate a coverage report (requires `lcov`/`genhtml`, e.g. `brew install lcov`):
+```bash
+make run-tests-with-coverage
+```
 
-### 4.3 Removing an Owner
-
-To remove an owner from the safe:
-
-1.  **Prepare the Transaction:** Fill out the `script/input/actions/SafeRemoveOwner.json` file with the address of the owner to be removed and the new threshold for the safe.
-2.  **Generate Calldata:** Run the following command to generate the transaction calldata:
-    ```bash
-    make get-safe-remove-owner-calldata NETWORK=${your-chosen-network}
-    ```
-3.  **Collect Signatures:** Follow the process described in section 4.1 to collect signatures for this transaction. Add the collected signatures to the `signatures` array in `SafeRemoveOwner.json`.
-4.  **Execute the Transaction:** Once you have enough signatures, execute the transaction by running:
-    ```bash
-    make safe-remove-owner NETWORK=${your-chosen-network} BROADCAST=1
-    ```
-
-### 4.4 Performing a Custom Transaction
-
-To execute a custom transaction through the safe:
-
-1.  **Generate Calldata:** First, generate the calldata for the action you want to perform. For example, to transfer 123 ERC20 tokens to a specific address, you would run:
-    ```bash
-    cast calldata "transfer(address,uint)" 0x71C7656EC7ab88b098defB751B7401B5f6d8976F 123e18
-    ```
-2.  **Prepare the Transaction:** Fill out the `script/input/actions/SafeTransaction.json` file with the details of your transaction, including the calldata generated in the previous step.
-3.  **Collect Signatures:** Follow the process described in section 4.1 to collect the required signatures. Add them to the `signatures` array in `SafeTransaction.json`.
-4.  **Execute the Transaction:** Execute the transaction by running:
-    ```bash
-    make safe-exec-transaction NETWORK=${your-chosen-network} BROADCAST=1
-    ```
+This runs the unit/fuzz suites and the invariant suite as separate shards (the invariant suite is serialized to avoid running out of memory under coverage instrumentation), merges the tracefiles into `lcov.info`, and generates an HTML report in `coverage/`. The fork test suite is excluded — it needs a live RPC and `ALCHEMY_API_KEY`.

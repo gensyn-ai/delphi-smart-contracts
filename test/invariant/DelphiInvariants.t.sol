@@ -22,13 +22,13 @@ contract Invariants_Shallow_Converge is All_Invariants {
     }
 }
 
-contract Invariants_Medium_Random is All_Invariants {
+contract Invariants_Balanced_Random is All_Invariants {
     function setUp() external {
         _setUp({handler_: new EndToEndHandler({minTradesPerMarket: 10, maxTradesPerMarket: 890, maxTraderCount: 25})});
     }
 }
 
-contract Invariants_Medium_Converge is All_Invariants {
+contract Invariants_Balanced_Converge is All_Invariants {
     function setUp() external {
         _setUp({
             handler_: new EndToEndHandler_Converge({

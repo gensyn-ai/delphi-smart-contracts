@@ -23,4 +23,6 @@ precision-loss-test/.venv/
 # Invariants
 corpus/
 lcov.info
+lcov-unit.info
+lcov-invariant.info
 coverage/

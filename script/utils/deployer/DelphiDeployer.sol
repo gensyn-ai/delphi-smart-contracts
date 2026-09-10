@@ -2,9 +2,9 @@
 pragma solidity 0.8.30;
 
 // Contracts
-import {DynamicParimutuelGateway} from "src/delphi/dynamicParimutuel/gateway/DynamicParimutuelGateway.sol";
-import {DynamicParimutuelMarket} from "src/delphi/dynamicParimutuel/implementation/DynamicParimutuelMarket.sol";
-import {DelphiFactory} from "src/delphi/factory/DelphiFactory.sol";
+import {LmsrGateway} from "src/lmsr/gateway/LmsrGateway.sol";
+import {LmsrMarket} from "src/lmsr/implementation/LmsrMarket.sol";
+import {DelphiFactory} from "src/factory/DelphiFactory.sol";
 
 // Interfaces
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
@@ -25,9 +25,9 @@ contract DelphiDeployer {
     }
 
     struct DelphiAddresses {
-        DynamicParimutuelGateway dynamicParimutuelGateway;
-        DynamicParimutuelMarket dynamicParimutuelImplementation;
-        DelphiFactory delphiFactory;
+        LmsrGateway gateway;
+        LmsrMarket implementation;
+        DelphiFactory factory;
     }
 
     // Libraries
@@ -36,13 +36,13 @@ contract DelphiDeployer {
     function _deployDelphi(DelphiConfig memory args) internal returns (DelphiAddresses memory) {
         _verifyDelphiArgs(args);
 
-        // Deploy DynamicParimutuel Gateway
-        DynamicParimutuelGateway dynamicParimutuelGateway = new DynamicParimutuelGateway(args.token, args.gatewayOwner);
+        // Deploy Lmsr Gateway
+        LmsrGateway gateway = new LmsrGateway(args.token, args.gatewayOwner);
 
-        // Deploy DynamicParimutuel Implementation
-        DynamicParimutuelMarket dynamicParimutuelImplementation = new DynamicParimutuelMarket({
+        // Deploy Lmsr Implementation
+        LmsrMarket implementation = new LmsrMarket({
             tradingFeesRecipient: args.tradingFeesRecipient,
-            gateway: address(dynamicParimutuelGateway),
+            gateway: address(gateway),
             tradingFeesRecipientPct: args.tradingFeesRecipientPct,
             keeperFee: args.keeperFee,
             oracleFee: args.oracleFee
@@ -50,19 +50,16 @@ contract DelphiDeployer {
 
         // Deploy DelphiFactory implementation
         DelphiFactory delphiFactory = new DelphiFactory({
-            implementation: address(dynamicParimutuelImplementation),
+            implementation: address(implementation),
             marketCreationFee: args.marketCreationFee,
             marketCreationFeeRecipient: args.marketCreationFeeRecipient
         });
 
         // Initialize Gateway
-        dynamicParimutuelGateway.initialize({delphiFactory_: delphiFactory});
+        gateway.initialize({delphiFactory_: delphiFactory});
 
-        return DelphiAddresses({
-            dynamicParimutuelGateway: dynamicParimutuelGateway,
-            dynamicParimutuelImplementation: dynamicParimutuelImplementation,
-            delphiFactory: delphiFactory
-        });
+        // Return DelphiAddresses
+        return DelphiAddresses({gateway: gateway, implementation: implementation, factory: delphiFactory});
     }
 
     function _verifyDelphiArgs(DelphiConfig memory args) internal pure {
@@ -80,9 +77,9 @@ contract DelphiDeployer {
             tradingFeesRecipientPct: json.readUint(".implementation.tradingFeesRecipientPct"),
             marketCreationFeeRecipient: json.readAddress(".factory.marketCreationFeeRecipient"),
             marketCreationFee: json.readUint(".factory.marketCreationFee"),
-            keeperFee: json.readUint(".factory.keeperFee"),
-            oracleFee: json.readUint(".factory.oracleFee"),
-            token: IERC20Metadata(json.readAddress(".token")),
+            keeperFee: json.readUint(".implementation.keeperFee"),
+            oracleFee: json.readUint(".implementation.oracleFee"),
+            token: IERC20Metadata(json.readAddress(".token.address")),
             gatewayOwner: json.readAddress(".gateway.owner")
         });
     }
