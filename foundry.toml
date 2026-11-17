@@ -44,6 +44,6 @@ corpus_dir = "corpus/invariants"
 [rpc_endpoints]
 anvil = "http://127.0.0.1:8545"
 gensyn-testnet = "https://gensyn-testnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
-gensyn-mainnet = "https://gensyn-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
+gensyn-mainnet = "https://rpc-gensyn-mainnet.t.conduit.xyz/${CONDUIT_API_KEY}"
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
