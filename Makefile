@@ -157,7 +157,7 @@ create-market:
 # invariant suite fully serialized on its own, then merge both tracefiles into a single
 # unified lcov.info before generating the HTML report.
 COVERAGE_INVARIANT_GLOB := test/invariant/**
-# The fork suite requires a live RPC + ALCHEMY_API_KEY (see AGENTS.md); exclude it from
+# The fork suite requires a live RPC + ALCHEMY_API_KEY (testnet) or CONDUIT_API_KEY (mainnet); exclude it from
 # the local coverage run so a missing key / offline network doesn't abort the shards.
 COVERAGE_UNIT_EXCLUDE_GLOB := test/{invariant,fork}/**
 
