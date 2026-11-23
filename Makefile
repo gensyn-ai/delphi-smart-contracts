@@ -48,7 +48,8 @@ ifneq ($(filter $(MAKECMDGOALS),$(ONCHAIN_TARGETS)),)
   endif
 
   # ===== VERIFY (only for VERIFY_REQUIRED_TARGETS, only when BROADCAST=1) =====
-  # Blockscout + Foundry wants verifier-url pointing to the explorer's /api/ endpoint. :contentReference[oaicite:3]{index=3}
+  # Testnet verifies on Blockscout (verifier-url = the explorer's /api/ endpoint).
+  # Mainnet runs on Conduit and verifies through Conduit's Sourcify server.
   VERIFY_FLAG :=
   ifeq ($(BROADCAST),1)
     ifneq ($(filter $(MAKECMDGOALS),$(VERIFY_REQUIRED_TARGETS)),)
@@ -58,31 +59,40 @@ ifneq ($(filter $(MAKECMDGOALS),$(ONCHAIN_TARGETS)),)
         $(error VERIFY is not set. When BROADCAST=1 for $(filter $(MAKECMDGOALS),$(VERIFY_REQUIRED_TARGETS)), set VERIFY=1 (verify) or VERIFY=0 (skip).)
       endif
 
-      # Allow overriding verifier URL explicitly.
+      # Allow overriding the verifier and its URL explicitly.
       # Otherwise, infer from NETWORK when it matches a known alias.
       #
       # Testnet Blockscout instance: https://gensyn-testnet.explorer.alchemy.com (API at /api/). :contentReference[oaicite:4]{index=4}
       #
-      # Mainnet default below assumes the same pattern. If yours differs, override:
-      #   make ... VERIFIER_URL='https://<your-explorer>/api/'
+      # Mainnet: Conduit's Sourcify server (https://docs.conduit.xyz/chains/explorer/verify-contracts);
+      # verified contracts show on https://explorer-gensyn-mainnet.t.conduit.xyz
+      #
+      # To use something else, override:
+      #   make ... VERIFIER=<blockscout|sourcify|etherscan> VERIFIER_URL='<url>'
       ifeq ($(NETWORK),gensyn-testnet)
+        DEFAULT_VERIFIER := blockscout
         DEFAULT_VERIFIER_URL := https://gensyn-testnet.explorer.alchemy.com/api/
       else ifeq ($(NETWORK),gensyn-mainnet)
-        DEFAULT_VERIFIER_URL := https://gensyn-mainnet.explorer.alchemy.com/api/
+        DEFAULT_VERIFIER := sourcify
+        DEFAULT_VERIFIER_URL := https://contracts.conduit.xyz
       else
+        DEFAULT_VERIFIER := blockscout
         DEFAULT_VERIFIER_URL :=
       endif
 
+      ifndef VERIFIER
+        VERIFIER := $(DEFAULT_VERIFIER)
+      endif
       ifndef VERIFIER_URL
         VERIFIER_URL := $(DEFAULT_VERIFIER_URL)
       endif
 
       ifeq ($(VERIFY),1)
         ifeq ($(strip $(VERIFIER_URL)),)
-          $(error VERIFIER_URL is not set. Set VERIFIER_URL=<blockscout_explorer_base>/api/)
+          $(error VERIFIER_URL is not set. Set VERIFIER_URL (and VERIFIER if not blockscout))
         endif
         VERIFY_FLAG := --verify \
-          --verifier blockscout \
+          --verifier $(VERIFIER) \
           --verifier-url '$(VERIFIER_URL)'
       else ifeq ($(VERIFY),0)
         VERIFY_FLAG :=
